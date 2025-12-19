@@ -3,14 +3,23 @@ from dotenv import load_dotenv
 import os
 from spotipy.oauth2 import SpotifyClientCredentials
 import spotipy
+
 from routes.auth import auth_bp
+from routes.notice import notice_bp
+from routes.user import user_bp
+
 
 load_dotenv()
 
 app = Flask(__name__)
 
+
 # Blueprint 등록
 app.register_blueprint(auth_bp)
+
+# 공지사항 라우트 등록
+app.register_blueprint(notice_bp)
+app.register_blueprint(user_bp)
 
 # Spotify 인증
 client_credentials_manager = SpotifyClientCredentials(

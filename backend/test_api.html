@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Listify API 테스트</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      min-height: 100vh;
+      color: #fff;
+      padding: 2rem;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 2rem;
+      background: linear-gradient(90deg, #1db954, #1ed760);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      font-size: 2.5rem;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+      gap: 1.5rem;
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      padding: 1.5rem;
+      backdrop-filter: blur(10px);
+    }
+
+    .card.wide {
+      grid-column: span 2;
+    }
+
+    .card h2 {
+      color: #1db954;
+      margin-bottom: 1rem;
+      font-size: 1.2rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .card h2::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      background: #1db954;
+      border-radius: 50%;
+    }
+
+    .form-group {
+      margin-bottom: 1rem;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 0.3rem;
+      color: #aaa;
+      font-size: 0.85rem;
+    }
+
+    input,
+    textarea,
+    select {
+      width: 100%;
+      padding: 0.75rem;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.3);
+      color: #fff;
+      font-size: 0.95rem;
+      transition: border-color 0.2s;
+    }
+
+    input:focus,
+    textarea:focus,
+    select:focus {
+      outline: none;
+      border-color: #1db954;
+    }
+
+    button {
+      width: 100%;
+      padding: 0.75rem;
+      background: linear-gradient(90deg, #1db954, #1ed760);
+      border: none;
+      border-radius: 8px;
+      color: #000;
+      font-weight: bold;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 20px rgba(29, 185, 84, 0.4);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    button.danger {
+      background: linear-gradient(90deg, #e74c3c, #c0392b);
+    }
+
+    button.secondary {
+      background: linear-gradient(90deg, #3498db, #2980b9);
+    }
+
+    .response-box {
+      margin-top: 1rem;
+      padding: 1rem;
+      background: rgba(0, 0, 0, 0.4);
+      border-radius: 8px;
+      font-family: 'Consolas', monospace;
+      font-size: 0.85rem;
+      max-height: 150px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .response-box.success {
+      border-left: 4px solid #1db954;
+    }
+
+    .response-box.error {
+      border-left: 4px solid #e74c3c;
+    }
+
+    .status-bar {
+      background: rgba(0, 0, 0, 0.5);
+      padding: 1rem;
+      border-radius: 12px;
+      margin-bottom: 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .status-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .status-item span:first-child {
+      color: #888;
+      font-size: 0.85rem;
+    }
+
+    .status-item span:last-child {
+      background: rgba(29, 185, 84, 0.2);
+      color: #1db954;
+      padding: 0.25rem 0.75rem;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 500;
+    }
+
+    .status-item.disconnected span:last-child {
+      background: rgba(231, 76, 60, 0.2);
+      color: #e74c3c;
+    }
+
+    .list-container {
+      margin-top: 1rem;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .list-item {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 0.75rem;
+      border-radius: 8px;
+      margin-bottom: 0.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: background 0.2s;
+    }
+
+    .list-item:hover {
+      background: rgba(0, 0, 0, 0.5);
+    }
+
+    .list-item .info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .list-item .title {
+      font-weight: bold;
+      color: #fff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .list-item .meta {
+      font-size: 0.8rem;
+      color: #888;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .list-item .actions {
+      display: flex;
+      gap: 0.5rem;
+      flex-shrink: 0;
+    }
+
+    .list-item button {
+      width: auto;
+      padding: 0.4rem 0.8rem;
+      font-size: 0.75rem;
+    }
+
+    .music-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .music-item img {
+      width: 40px;
+      height: 40px;
+      border-radius: 4px;
+      object-fit: cover;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .btn-group button {
+      flex: 1;
+    }
+
+    .tab-buttons {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .tab-buttons button {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+    }
+
+    .tab-buttons button.active {
+      background: linear-gradient(90deg, #1db954, #1ed760);
+      color: #000;
+    }
+
+    .search-box {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .search-box input {
+      flex: 1;
+    }
+
+    .search-box button {
+      width: auto;
+      padding: 0.75rem 1.5rem;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>🎵 Listify API 테스트</h1>
+
+  <div class="status-bar">
+    <div class="status-item" id="loginStatus">
+      <span>로그인 상태:</span>
+      <span>로그인 필요</span>
+    </div>
+    <div class="status-item" id="userInfo" style="display:none;">
+      <span>사용자:</span>
+      <span id="userNickname">-</span>
+    </div>
+    <div class="status-item" id="tokenInfo" style="display:none;">
+      <span>Token:</span>
+      <span id="tokenPreview">-</span>
+    </div>
+    <button onclick="logout()" style="width:auto; padding:0.5rem 1rem; font-size:0.85rem;" class="danger">로그아웃</button>
+  </div>
+
+  <div class="container">
+    <!-- 회원가입 -->
+    <div class="card">
+      <h2>1. 회원가입</h2>
+      <div class="form-group">
+        <label>이메일</label>
+        <input type="email" id="regEmail" placeholder="test@example.com" value="test@listify.com">
+      </div>
+      <div class="form-group">
+        <label>비밀번호</label>
+        <input type="password" id="regPassword" placeholder="비밀번호" value="test1234">
+      </div>
+      <div class="form-group">
+        <label>닉네임</label>
+        <input type="text" id="regNickname" placeholder="닉네임" value="테스트유저">
+      </div>
+      <button onclick="register()">회원가입</button>
+      <div class="response-box" id="regResponse">응답 대기 중...</div>
+    </div>
+
+    <!-- 로그인 -->
+    <div class="card">
+      <h2>2. 로그인</h2>
+      <div class="form-group">
+        <label>이메일</label>
+        <input type="email" id="loginEmail" placeholder="test@example.com" value="test@listify.com">
+      </div>
+      <div class="form-group">
+        <label>비밀번호</label>
+        <input type="password" id="loginPassword" placeholder="비밀번호" value="test1234">
+      </div>
+      <button onclick="login()">로그인</button>
+      <div class="response-box" id="loginResponse">응답 대기 중...</div>
+    </div>
+
+    <!-- 플레이리스트 생성 -->
+    <div class="card">
+      <h2>3. 플레이리스트 생성</h2>
+      <div class="form-group">
+        <label>제목</label>
+        <input type="text" id="createTitle" placeholder="플레이리스트 제목" value="나의 첫 플레이리스트">
+      </div>
+      <div class="form-group">
+        <label>설명</label>
+        <textarea id="createContent" placeholder="플레이리스트 설명" rows="2">좋아하는 노래 모음</textarea>
+      </div>
+      <button onclick="createPlaylist()">플레이리스트 생성</button>
+      <div class="response-box" id="createResponse">응답 대기 중...</div>
+    </div>
+
+    <!-- 플레이리스트 수정 -->
+    <div class="card">
+      <h2>4. 플레이리스트 수정</h2>
+      <div class="form-group">
+        <label>플레이리스트 번호</label>
+        <input type="number" id="updateNo" placeholder="playlist_no" value="1">
+      </div>
+      <div class="form-group">
+        <label>새 제목</label>
+        <input type="text" id="updateTitle" placeholder="새 제목" value="수정된 플레이리스트">
+      </div>
+      <div class="form-group">
+        <label>새 설명</label>
+        <textarea id="updateContent" placeholder="새 설명" rows="2">수정된 설명입니다</textarea>
+      </div>
+      <button onclick="updatePlaylist()">플레이리스트 수정</button>
+      <div class="response-box" id="updateResponse">응답 대기 중...</div>
+    </div>
+
+    <!-- 플레이리스트 삭제 -->
+    <div class="card">
+      <h2>5. 플레이리스트 삭제</h2>
+      <div class="form-group">
+        <label>플레이리스트 번호</label>
+        <input type="number" id="deleteNo" placeholder="playlist_no" value="1">
+      </div>
+      <button onclick="deletePlaylist()" class="danger">플레이리스트 삭제</button>
+      <div class="response-box" id="deleteResponse">응답 대기 중...</div>
+    </div>
+
+    <!-- 내 플레이리스트 조회 -->
+    <div class="card">
+      <h2>6. 내 플레이리스트 조회</h2>
+      <button onclick="getMyPlaylists()">내 플레이리스트 불러오기</button>
+      <div class="response-box" id="listResponse">응답 대기 중...</div>
+      <div class="list-container" id="playlistList"></div>
+    </div>
+
+    <!-- 전체 음악 목록 -->
+    <div class="card wide">
+      <h2>7. 전체 음악 목록</h2>
+      <div class="search-box">
+        <input type="text" id="musicSearch" placeholder="음악 검색 (제목 또는 아티스트)">
+        <button onclick="getAllMusic()">음악 불러오기</button>
+      </div>
+      <div class="form-group">
+        <label>추가할 플레이리스트 선택</label>
+        <select id="targetPlaylist">
+          <option value="">-- 먼저 플레이리스트를 조회하세요 --</option>
+        </select>
+      </div>
+      <div class="response-box" id="musicResponse">응답 대기 중...</div>
+      <div class="list-container" id="musicList"></div>
+    </div>
+
+    <!-- 플레이리스트 음악 관리 -->
+    <div class="card wide">
+      <h2>8. 플레이리스트 음악 관리</h2>
+      <div class="btn-group">
+        <div class="form-group" style="flex:1; margin-bottom:0;">
+          <label>플레이리스트 번호</label>
+          <input type="number" id="playlistMusicNo" placeholder="playlist_no" value="1">
+        </div>
+        <button onclick="getPlaylistMusic()" style="align-self:flex-end;">음악 목록 조회</button>
+      </div>
+      <div class="response-box" id="playlistMusicResponse">응답 대기 중...</div>
+      <div class="list-container" id="playlistMusicList"></div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = 'https://lemon-lies-scream.loca.lt';
+    let allMusicData = [];
+
+    // 페이지 로드 시 저장된 토큰 확인
+    window.onload = () => {
+      updateStatusBar();
+    };
+
+    function getToken() {
+      return localStorage.getItem('access_token');
+    }
+
+    function getUserNo() {
+      return localStorage.getItem('user_no');
+    }
+
+    function updateStatusBar() {
+      const token = getToken();
+      const nickname = localStorage.getItem('nickname');
+      const loginStatus = document.getElementById('loginStatus');
+      const userInfo = document.getElementById('userInfo');
+      const tokenInfo = document.getElementById('tokenInfo');
+
+      if (token) {
+        loginStatus.innerHTML = '<span>로그인 상태:</span><span>로그인됨 ✓</span>';
+        loginStatus.classList.remove('disconnected');
+        userInfo.style.display = 'flex';
+        tokenInfo.style.display = 'flex';
+        document.getElementById('userNickname').textContent = nickname || '-';
+        document.getElementById('tokenPreview').textContent = token.substring(0, 20) + '...';
+      } else {
+        loginStatus.innerHTML = '<span>로그인 상태:</span><span>로그인 필요</span>';
+        loginStatus.classList.add('disconnected');
+        userInfo.style.display = 'none';
+        tokenInfo.style.display = 'none';
+      }
+    }
+
+    function showResponse(elementId, data, isSuccess) {
+      const el = document.getElementById(elementId);
+      el.textContent = JSON.stringify(data, null, 2);
+      el.className = 'response-box ' + (isSuccess ? 'success' : 'error');
+    }
+
+    async function register() {
+      const email = document.getElementById('regEmail').value;
+      const password = document.getElementById('regPassword').value;
+      const nickname = document.getElementById('regNickname').value;
+
+      try {
+        const res = await fetch(`${API_BASE}/auth/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, nickname })
+        });
+        const data = await res.json();
+        showResponse('regResponse', data, data.success);
+      } catch (e) {
+        showResponse('regResponse', { error: e.message }, false);
+      }
+    }
+
+    async function login() {
+      const email = document.getElementById('loginEmail').value;
+      const password = document.getElementById('loginPassword').value;
+
+      try {
+        const res = await fetch(`${API_BASE}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        const data = await res.json();
+        showResponse('loginResponse', data, data.success);
+
+        if (data.success && data.data) {
+          localStorage.setItem('access_token', data.data.access_token);
+          localStorage.setItem('user_no', data.data.user_no);
+          localStorage.setItem('nickname', data.data.nickname);
+          updateStatusBar();
+        }
+      } catch (e) {
+        showResponse('loginResponse', { error: e.message }, false);
+      }
+    }
+
+    function logout() {
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('user_no');
+      localStorage.removeItem('nickname');
+      updateStatusBar();
+      alert('로그아웃 되었습니다.');
+    }
+
+    async function createPlaylist() {
+      const token = getToken();
+      if (!token) {
+        showResponse('createResponse', { error: '로그인이 필요합니다.' }, false);
+        return;
+      }
+
+      const title = document.getElementById('createTitle').value;
+      const content = document.getElementById('createContent').value;
+
+      try {
+        const res = await fetch(`${API_BASE}/playlist`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ title, content })
+        });
+        const data = await res.json();
+        showResponse('createResponse', data, data.success);
+
+        if (data.success && data.data) {
+          document.getElementById('updateNo').value = data.data.playlist_no;
+          document.getElementById('deleteNo').value = data.data.playlist_no;
+          document.getElementById('playlistMusicNo').value = data.data.playlist_no;
+          getMyPlaylists(); // 플레이리스트 목록 새로고침
+        }
+      } catch (e) {
+        showResponse('createResponse', { error: e.message }, false);
+      }
+    }
+
+    async function updatePlaylist() {
+      const token = getToken();
+      if (!token) {
+        showResponse('updateResponse', { error: '로그인이 필요합니다.' }, false);
+        return;
+      }
+
+      const playlistNo = document.getElementById('updateNo').value;
+      const title = document.getElementById('updateTitle').value;
+      const content = document.getElementById('updateContent').value;
+
+      try {
+        const res = await fetch(`${API_BASE}/playlist/${playlistNo}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ title, content })
+        });
+        const data = await res.json();
+        showResponse('updateResponse', data, data.success);
+      } catch (e) {
+        showResponse('updateResponse', { error: e.message }, false);
+      }
+    }
+
+    async function deletePlaylist() {
+      const token = getToken();
+      if (!token) {
+        showResponse('deleteResponse', { error: '로그인이 필요합니다.' }, false);
+        return;
+      }
+
+      const playlistNo = document.getElementById('deleteNo').value;
+
+      if (!confirm(`플레이리스트 #${playlistNo}를 삭제하시겠습니까?`)) return;
+
+      try {
+        const res = await fetch(`${API_BASE}/playlist/${playlistNo}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        const data = await res.json();
+        showResponse('deleteResponse', data, data.success);
+        if (data.success) getMyPlaylists();
+      } catch (e) {
+        showResponse('deleteResponse', { error: e.message }, false);
+      }
+    }
+
+    async function getMyPlaylists() {
+      const token = getToken();
+      const userNo = getUserNo();
+
+      if (!token || !userNo) {
+        showResponse('listResponse', { error: '로그인이 필요합니다.' }, false);
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/playlist/user/${userNo}`, {
+          method: 'GET',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        showResponse('listResponse', data, data.success);
+
+        const listEl = document.getElementById('playlistList');
+        const selectEl = document.getElementById('targetPlaylist');
+
+        if (data.success && data.data && Array.isArray(data.data)) {
+          // 플레이리스트 목록 렌더링
+          listEl.innerHTML = data.data.map(p => `
+            <div class="list-item">
+              <div class="info">
+                <div class="title">#${p.playlist_no} ${p.title}</div>
+                <div class="meta">${p.content || '설명 없음'}</div>
+              </div>
+              <div class="actions">
+                <button onclick="document.getElementById('playlistMusicNo').value=${p.playlist_no}; getPlaylistMusic();" class="secondary">음악보기</button>
+                <button onclick="document.getElementById('updateNo').value=${p.playlist_no}; document.getElementById('updateTitle').value='${p.title}';">수정</button>
+                <button onclick="document.getElementById('deleteNo').value=${p.playlist_no};" class="danger">삭제</button>
+              </div>
+            </div>
+          `).join('');
+
+          // 플레이리스트 선택 옵션 업데이트
+          selectEl.innerHTML = '<option value="">-- 플레이리스트 선택 --</option>' +
+            data.data.map(p => `<option value="${p.playlist_no}">#${p.playlist_no} ${p.title}</option>`).join('');
+        } else {
+          listEl.innerHTML = '<p style="color:#888; text-align:center; padding:1rem;">플레이리스트가 없습니다.</p>';
+          selectEl.innerHTML = '<option value="">-- 플레이리스트 없음 --</option>';
+        }
+      } catch (e) {
+        showResponse('listResponse', { error: e.message }, false);
+      }
+    }
+
+    // ===== 음악 관련 함수 =====
+
+    async function getAllMusic() {
+      try {
+        const res = await fetch(`${API_BASE}/music`, { method: 'GET' });
+        const data = await res.json();
+        showResponse('musicResponse', { success: data.success, count: data.data?.length || 0 }, data.success);
+
+        allMusicData = data.data || [];
+        renderMusicList();
+      } catch (e) {
+        showResponse('musicResponse', { error: e.message }, false);
+      }
+    }
+
+    function renderMusicList() {
+      const searchTerm = document.getElementById('musicSearch').value.toLowerCase();
+      const filteredMusic = allMusicData.filter(m =>
+        m.track_name.toLowerCase().includes(searchTerm) ||
+        m.artist_name.toLowerCase().includes(searchTerm)
+      );
+
+      const listEl = document.getElementById('musicList');
+      if (filteredMusic.length === 0) {
+        listEl.innerHTML = '<p style="color:#888; text-align:center; padding:1rem;">음악이 없습니다.</p>';
+        return;
+      }
+
+      listEl.innerHTML = filteredMusic.slice(0, 50).map(m => `
+        <div class="list-item">
+          <div class="music-item">
+            <img src="${m.album_image_url || 'https://via.placeholder.com/40'}" alt="album">
+            <div class="info">
+              <div class="title">${m.track_name}</div>
+              <div class="meta">${m.artist_name} · ${m.album_name}</div>
+            </div>
+          </div>
+          <div class="actions">
+            <button onclick="addMusicToPlaylist(${m.music_no})">+ 추가</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // 검색 입력 시 필터링
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('musicSearch').addEventListener('input', renderMusicList);
+    });
+
+    async function addMusicToPlaylist(musicNo) {
+      const token = getToken();
+      if (!token) {
+        alert('로그인이 필요합니다.');
+        return;
+      }
+
+      const playlistNo = document.getElementById('targetPlaylist').value;
+      if (!playlistNo) {
+        alert('추가할 플레이리스트를 선택하세요.');
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/playlist/${playlistNo}/music`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ music_no: musicNo })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          alert(`음악이 플레이리스트 #${playlistNo}에 추가되었습니다!`);
+          // 현재 조회 중인 플레이리스트 새로고침
+          if (document.getElementById('playlistMusicNo').value == playlistNo) {
+            getPlaylistMusic();
+          }
+        } else {
+          alert('추가 실패: ' + data.message);
+        }
+      } catch (e) {
+        alert('오류: ' + e.message);
+      }
+    }
+
+    async function getPlaylistMusic() {
+      const playlistNo = document.getElementById('playlistMusicNo').value;
+      if (!playlistNo) {
+        showResponse('playlistMusicResponse', { error: '플레이리스트 번호를 입력하세요.' }, false);
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/playlist/${playlistNo}/music`, { method: 'GET' });
+        const data = await res.json();
+        showResponse('playlistMusicResponse', data, data.success);
+
+        const listEl = document.getElementById('playlistMusicList');
+        const musicList = data.data?.music_list || [];
+
+        if (musicList.length === 0) {
+          listEl.innerHTML = '<p style="color:#888; text-align:center; padding:1rem;">플레이리스트에 음악이 없습니다.</p>';
+          return;
+        }
+
+        listEl.innerHTML = musicList.map(m => `
+          <div class="list-item">
+            <div class="music-item">
+              <img src="${m.album_image_url || 'https://via.placeholder.com/40'}" alt="album">
+              <div class="info">
+                <div class="title">${m.track_name}</div>
+                <div class="meta">${m.artist_name} · ${m.album_name}</div>
+              </div>
+            </div>
+            <div class="actions">
+              <button onclick="removeMusicFromPlaylist(${playlistNo}, ${m.music_no})" class="danger">삭제</button>
+            </div>
+          </div>
+        `).join('');
+      } catch (e) {
+        showResponse('playlistMusicResponse', { error: e.message }, false);
+      }
+    }
+
+    async function removeMusicFromPlaylist(playlistNo, musicNo) {
+      const token = getToken();
+      if (!token) {
+        alert('로그인이 필요합니다.');
+        return;
+      }
+
+      if (!confirm('이 음악을 플레이리스트에서 삭제하시겠습니까?')) return;
+
+      try {
+        const res = await fetch(`${API_BASE}/playlist/${playlistNo}/music/${musicNo}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          alert('음악이 삭제되었습니다.');
+          getPlaylistMusic();
+        } else {
+          alert('삭제 실패: ' + data.message);
+        }
+      } catch (e) {
+        alert('오류: ' + e.message);
+      }
+    }
+  </script>
+</body>
+
+</html>

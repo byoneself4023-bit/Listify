@@ -1,22 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Home, Library, Search as SearchIcon, User as UserIcon, LogOut, 
-  Settings, Bell, Plus, Play, Pause, Music as MusicIcon, 
+import {
+  Home, Library, Search as SearchIcon, User as UserIcon, LogOut,
+  Settings, Bell, Plus, Play, Pause, Music as MusicIcon,
   Search, Loader2, Heart, Check, Calendar, Clock, Edit3
 } from 'lucide-react';
 import { Music, Playlist, AppView, User } from './types';
-import { getAccessToken, getPopularTracks, searchSpotifyTracks } from './services/spotifyService';
+import { searchMusic, getAllMusic, getTop50Music } from './services/musicService';
 import { login, register, logout as logoutApi, getToken, verifyToken } from './services/authService';
-import { SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, MOCK_NOTICES, MOCK_STATS } from './constants';
+import { getUserPlaylists, createPlaylist, updatePlaylist, deletePlaylist, addMusicToPlaylist, removeMusicFromPlaylist, getPlaylistMusic } from './services/playlistService';
+import { MOCK_NOTICES, MOCK_STATS } from './constants';
 
 import Header from './components/Header';
 import PlaylistCard from './components/PlaylistCard';
 import SettingsModal from './components/SettingsModal';
 import CartSidebar from './components/CartSidebar';
+import PlaylistDetail from './components/PlaylistDetail';
+import CreatePlaylistModal from './components/CreatePlaylistModal';
 import { GenreDistribution, WeeklyActivity, AudioRadar } from './components/Charts';
 import { Login } from './components/Login';
 import { Register } from './components/Register';
-// test
 
 type AuthView = 'login' | 'register' | null;
 
@@ -24,13 +26,12 @@ function App() {
   const [user, setUser] = useState<User | null>(null);
   const [authView, setAuthView] = useState<AuthView>('login');
   const [view, setView] = useState<AppView>('home');
-  const [spotifyToken, setSpotifyToken] = useState<string | null>(null);
   const [songs, setSongs] = useState<Music[]>([]);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [currentSong, setCurrentSong] = useState<Music | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  
+
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Music[]>([]);
@@ -39,6 +40,14 @@ function App() {
   // Cart state
   const [cart, setCart] = useState<Music[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
+
+  // Playlist detail & modal state
+  const [selectedPlaylist, setSelectedPlaylist] = useState<Playlist | null>(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isAuthChecking, setIsAuthChecking] = useState(true);
 
   // 자동 로그인 체크
   useEffect(() => {
@@ -58,34 +67,142 @@ function App() {
             created_at: new Date().toISOString()
           });
           setAuthView(null);
+          // 플레이리스트 목록 불러오기
+          fetchPlaylists(userNo);
         }
       }
+      setIsAuthChecking(false);
     };
     checkAuth();
   }, []);
 
+  // 플레이리스트 목록 조회 함수
+  const fetchPlaylists = async (userNo: number) => {
+    setIsLoading(true);
+    try {
+      const response = await getUserPlaylists(userNo);
+      if (response.success && response.data) {
+        // 각 플레이리스트의 음악 목록도 함께 조회
+        const playlistsWithMusic = await Promise.all(
+          response.data.map(async (p: Playlist) => {
+            const musicRes = await getPlaylistMusic(p.playlist_no);
+            // API 응답: { data: { music_list: [...], count: N, playlist_no: N } }
+            const musicData = musicRes.data as any;
+            return {
+              ...p,
+              music_items: musicRes.success && musicData?.music_list ? musicData.music_list : []
+            };
+          })
+        );
+        setPlaylists(playlistsWithMusic);
+      }
+    } catch (e) {
+      console.error('플레이리스트 조회 실패:', e);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 플레이리스트 저장 핸들러 (장바구니에서 호출)
+  const handleSavePlaylist = async (title: string, desc: string) => {
+    if (!user) return;
+
+    try {
+      // 1. 플레이리스트 생성
+      const createRes = await createPlaylist(title, desc);
+      if (!createRes.success || !createRes.data) {
+        console.error('플레이리스트 생성 실패');
+        return;
+      }
+
+      const playlistNo = createRes.data.playlist_no;
+
+      // 2. 장바구니의 곡들을 플레이리스트에 추가 (music_no가 있는 곡만)
+      for (const music of cart) {
+        if (music.music_no) {
+          await addMusicToPlaylist(playlistNo, music.music_no);
+        }
+      }
+
+      // 3. 상태 업데이트
+      await fetchPlaylists(user.user_no);
+      setCart([]);
+      setIsCartOpen(false);
+      setView('library');
+    } catch (e) {
+      console.error('플레이리스트 저장 실패:', e);
+    }
+  };
+
+  // 플레이리스트 삭제 핸들러
+  const handleDeletePlaylist = async () => {
+    if (!selectedPlaylist || !user) return;
+
+    if (!confirm('정말 이 플레이리스트를 삭제하시겠습니까?')) return;
+
+    try {
+      const res = await deletePlaylist(selectedPlaylist.playlist_no);
+      if (res.success) {
+        await fetchPlaylists(user.user_no);
+        setIsDetailOpen(false);
+        setSelectedPlaylist(null);
+      }
+    } catch (e) {
+      console.error('플레이리스트 삭제 실패:', e);
+    }
+  };
+
+  // 플레이리스트에서 곡 삭제 핸들러
+  const handleRemoveMusic = async (musicNo: number) => {
+    if (!selectedPlaylist || !user) return;
+
+    try {
+      const res = await removeMusicFromPlaylist(selectedPlaylist.playlist_no, musicNo);
+      if (res.success) {
+        // 선택된 플레이리스트 업데이트
+        const updatedMusicItems = selectedPlaylist.music_items?.filter(m => m.music_no !== musicNo) || [];
+        setSelectedPlaylist({ ...selectedPlaylist, music_items: updatedMusicItems });
+        // 전체 목록도 업데이트
+        await fetchPlaylists(user.user_no);
+      }
+    } catch (e) {
+      console.error('곡 삭제 실패:', e);
+    }
+  };
+
+  // 플레이리스트 카드 클릭 핸들러
+  const handlePlaylistClick = (playlist: Playlist) => {
+    setSelectedPlaylist(playlist);
+    setIsDetailOpen(true);
+  };
+
+  // 백엔드 API로 DB에 저장된 음악 목록 가져오기
   useEffect(() => {
     const init = async () => {
       try {
-        const data = await getAccessToken(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET);
-        setSpotifyToken(data.access_token);
-        const popular = await getPopularTracks(data.access_token);
-        setSongs(popular);
-      } catch (e) { 
-        console.error(e); 
+        // 백엔드 API로 전체 음악 목록 가져오기
+        const response = await getAllMusic();
+        if (response.success && response.data) {
+          setSongs(response.data);
+        }
+      } catch (e) {
+        console.error(e);
       }
     };
     init();
   }, []);
 
+  // 백엔드 API로 음악 검색 (검색 결과는 자동으로 DB에 저장됨)
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!searchQuery.trim() || !spotifyToken) return;
-    
+    if (!searchQuery.trim()) return;
+
     setIsSearching(true);
     try {
-      const results = await searchSpotifyTracks(searchQuery, spotifyToken, 30);
-      setSearchResults(results);
+      const response = await searchMusic(searchQuery);
+      if (response.success && response.data) {
+        setSearchResults(response.data);
+      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -102,12 +219,21 @@ function App() {
     }
   };
 
+  // 인증 확인 중 로딩 화면
+  if (isAuthChecking) {
+    return (
+      <div className="flex h-screen bg-black text-white items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   // 로그인/회원가입 화면
   if (!user) {
     return (
       <>
         {authView === 'login' && (
-          <Login 
+          <Login
             onLoginSuccess={(userNo, nickname) => {
               setUser({
                 user_no: userNo,
@@ -118,12 +244,14 @@ function App() {
                 created_at: new Date().toISOString()
               });
               setAuthView(null);
+              // 로그인 후 플레이리스트 목록 불러오기
+              fetchPlaylists(userNo);
             }}
             onSwitchToRegister={() => setAuthView('register')}
           />
         )}
         {authView === 'register' && (
-          <Register 
+          <Register
             onRegisterSuccess={() => setAuthView('login')}
             onSwitchToLogin={() => setAuthView('login')}
           />
@@ -134,12 +262,12 @@ function App() {
 
   return (
     <div className="flex h-screen bg-black text-white overflow-hidden">
-      <SettingsModal 
-        isOpen={isSettingsOpen} 
+      <SettingsModal
+        isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         onSave={(id, secret) => console.log('Saved Credentials')}
-        initialClientId={SPOTIFY_CLIENT_ID}
-        initialClientSecret={SPOTIFY_CLIENT_SECRET}
+        initialClientId=""
+        initialClientSecret=""
       />
 
       {/* Sidebar */}
@@ -148,7 +276,7 @@ function App() {
           <MusicIcon className="w-8 h-8" />
           <span className="text-xl font-bold tracking-tight">Listify</span>
         </div>
-        
+
         <nav className="flex-1 px-4 space-y-1">
           {[
             { id: 'home', icon: Home, label: '홈' },
@@ -157,14 +285,16 @@ function App() {
             { id: 'profile', icon: UserIcon, label: '프로필' },
             { id: 'notices', icon: Bell, label: '공지사항' }
           ].map((item) => (
-            <button 
+            <button
               key={item.id}
-              onClick={() => setView(item.id as AppView)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
-                view === item.id 
-                ? 'bg-zinc-900 text-primary font-bold shadow-inner' 
+              onClick={() => {
+                setView(item.id as AppView);
+                setIsDetailOpen(false);
+              }}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${view === item.id
+                ? 'bg-zinc-900 text-primary font-bold shadow-inner'
                 : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
-              }`}
+                }`}
             >
               <item.icon className="w-5 h-5" /> {item.label}
             </button>
@@ -172,34 +302,34 @@ function App() {
         </nav>
 
         <div className="p-4 border-t border-zinc-800 space-y-2">
-           <button 
+          <button
             onClick={() => setIsCartOpen(true)}
             className="w-full flex items-center justify-between px-4 py-2 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors text-sm border border-primary/20"
-           >
-             <span className="flex items-center gap-2 font-medium"><Plus className="w-4 h-4" /> 장바구니</span>
-             <span className="bg-primary text-black text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">{cart.length}</span>
-           </button>
-           <button onClick={() => setIsSettingsOpen(true)} className="w-full flex items-center gap-3 px-4 py-2 text-zinc-500 hover:text-white text-sm transition-colors">
-             <Settings className="w-4 h-4" /> 설정
-           </button>
-           <button 
-             onClick={() => {
-               logoutApi();
-               setUser(null);
-               setAuthView('login');
-             }} 
-             className="w-full flex items-center gap-3 px-4 py-2 text-zinc-500 hover:text-red-400 text-sm transition-colors"
-           >
-             <LogOut className="w-4 h-4" /> 로그아웃
-           </button>
+          >
+            <span className="flex items-center gap-2 font-medium"><Plus className="w-4 h-4" /> 장바구니</span>
+            <span className="bg-primary text-black text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">{cart.length}</span>
+          </button>
+          <button onClick={() => setIsSettingsOpen(true)} className="w-full flex items-center gap-3 px-4 py-2 text-zinc-500 hover:text-white text-sm transition-colors">
+            <Settings className="w-4 h-4" /> 설정
+          </button>
+          <button
+            onClick={() => {
+              logoutApi();
+              setUser(null);
+              setAuthView('login');
+            }}
+            className="w-full flex items-center gap-3 px-4 py-2 text-zinc-500 hover:text-red-400 text-sm transition-colors"
+          >
+            <LogOut className="w-4 h-4" /> 로그아웃
+          </button>
         </div>
       </aside>
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 bg-black relative overflow-hidden">
-        <Header 
-          viewTitle={view === 'home' ? 'Home' : view === 'search' ? 'Search' : view === 'library' ? 'Library' : view === 'profile' ? 'Profile & Analytics' : 'Notices'} 
-          user={user} 
+        <Header
+          viewTitle={view === 'home' ? 'Home' : view === 'search' ? 'Search' : view === 'library' ? 'Library' : view === 'profile' ? 'Profile & Analytics' : 'Notices'}
+          user={user}
         />
 
         <div className="flex-1 overflow-y-auto p-8 pb-32">
@@ -210,7 +340,7 @@ function App() {
                 <p className="text-zinc-400 text-lg max-w-lg leading-relaxed">
                   당신만의 음악 장바구니를 채우고 완벽한 플레이리스트를 만들어보세요.
                 </p>
-                <button 
+                <button
                   onClick={() => setView('search')}
                   className="mt-6 bg-white text-black px-6 py-3 rounded-full font-bold hover:scale-105 transition-transform"
                 >
@@ -228,13 +358,12 @@ function App() {
                     <div key={i} className="bg-zinc-900/40 p-4 rounded-xl border border-zinc-800/50 hover:bg-zinc-800/60 hover:border-zinc-700 transition-all group relative">
                       <div className="relative mb-3 aspect-square rounded-lg overflow-hidden">
                         <img src={song.album_image_url} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                        <button 
+                        <button
                           onClick={() => toggleCart(song)}
-                          className={`absolute bottom-2 right-2 p-2 rounded-full shadow-xl transition-all ${
-                            cart.some(c => c.spotify_url === song.spotify_url)
+                          className={`absolute bottom-2 right-2 p-2 rounded-full shadow-xl transition-all ${cart.some(c => c.spotify_url === song.spotify_url)
                             ? 'bg-primary text-black opacity-100'
                             : 'bg-black/60 text-white opacity-0 group-hover:opacity-100 hover:bg-white hover:text-black'
-                          }`}
+                            }`}
                         >
                           {cart.some(c => c.spotify_url === song.spotify_url) ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
                         </button>
@@ -253,7 +382,7 @@ function App() {
               <div className="max-w-2xl mx-auto">
                 <form onSubmit={handleSearch} className="relative group">
                   <Search className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${isSearching ? 'text-primary' : 'text-zinc-500 group-focus-within:text-primary'}`} />
-                  <input 
+                  <input
                     type="text"
                     placeholder="곡 제목, 아티스트 또는 앨범 검색"
                     className="w-full bg-zinc-900 border border-zinc-800 rounded-full py-4 pl-12 pr-4 text-lg focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all shadow-xl"
@@ -275,13 +404,12 @@ function App() {
                           <p className="font-bold text-sm truncate text-white">{song.track_name}</p>
                           <p className="text-xs text-zinc-400 truncate mt-0.5">{song.artist_name}</p>
                         </div>
-                        <button 
+                        <button
                           onClick={() => toggleCart(song)}
-                          className={`p-2 rounded-full transition-all ${
-                            cart.some(c => c.spotify_url === song.spotify_url)
+                          className={`p-2 rounded-full transition-all ${cart.some(c => c.spotify_url === song.spotify_url)
                             ? 'bg-primary/20 text-primary border border-primary/30'
                             : 'bg-zinc-800 text-zinc-400 opacity-0 group-hover:opacity-100 hover:text-white'
-                          }`}
+                            }`}
                         >
                           {cart.some(c => c.spotify_url === song.spotify_url) ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
                         </button>
@@ -299,10 +427,10 @@ function App() {
           )}
 
           {view === 'library' && (
-            <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+            <div className="space-y-6">
               <div className="flex justify-between items-center">
                 <h2 className="text-3xl font-bold">라이브러리</h2>
-                <button 
+                <button
                   onClick={() => setView('search')}
                   className="bg-white text-black px-6 py-2 rounded-full text-sm font-bold hover:bg-zinc-200 transition-colors flex items-center gap-2"
                 >
@@ -311,13 +439,13 @@ function App() {
               </div>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                 {playlists.length === 0 ? (
-                  <div className="col-span-full py-32 text-center border-2 border-dashed border-zinc-800 rounded-3xl group hover:border-zinc-700 transition-colors">
-                    <MusicIcon className="w-16 h-16 mx-auto mb-4 text-zinc-700 group-hover:text-zinc-500 transition-colors" />
+                  <div className="col-span-full py-32 text-center border-2 border-dashed border-zinc-800 rounded-3xl">
+                    <MusicIcon className="w-16 h-16 mx-auto mb-4 text-zinc-700" />
                     <p className="text-zinc-500 text-lg">아직 저장된 플레이리스트가 없습니다.</p>
                     <p className="text-zinc-600 text-sm mt-2">좋아하는 곡을 찾아 장바구니에 담아보세요.</p>
                   </div>
                 ) : (
-                  playlists.map(p => <PlaylistCard key={p.playlist_no} playlist={p} onClick={() => {}} />)
+                  playlists.map(p => <PlaylistCard key={p.playlist_no} playlist={p} onClick={handlePlaylistClick} />)
                 )}
               </div>
             </div>
@@ -355,24 +483,24 @@ function App() {
               {/* Analytics Section */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <div className="bg-zinc-900/50 p-6 rounded-3xl border border-zinc-800">
-                   <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-                     <Plus className="w-4 h-4 text-primary" /> 선호 장르 분포
-                   </h3>
-                   <GenreDistribution data={MOCK_STATS.topGenres} />
+                  <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+                    <Plus className="w-4 h-4 text-primary" /> 선호 장르 분포
+                  </h3>
+                  <GenreDistribution data={MOCK_STATS.topGenres} />
                 </div>
                 <div className="bg-zinc-900/50 p-6 rounded-3xl border border-zinc-800">
-                   <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-                     <Clock className="w-4 h-4 text-primary" /> 주간 활동 패턴
-                   </h3>
-                   <WeeklyActivity data={MOCK_STATS.weeklyActivity} />
+                  <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-primary" /> 주간 활동 패턴
+                  </h3>
+                  <WeeklyActivity data={MOCK_STATS.weeklyActivity} />
                 </div>
                 <div className="bg-zinc-900/50 p-6 rounded-3xl border border-zinc-800 lg:col-span-2">
-                   <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-                     <MusicIcon className="w-4 h-4 text-primary" /> 음악적 특성 분석
-                   </h3>
-                   <div className="max-w-xl mx-auto">
-                     <AudioRadar data={MOCK_STATS.audioFeatures} />
-                   </div>
+                  <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+                    <MusicIcon className="w-4 h-4 text-primary" /> 음악적 특성 분석
+                  </h3>
+                  <div className="max-w-xl mx-auto">
+                    <AudioRadar data={MOCK_STATS.audioFeatures} />
+                  </div>
                 </div>
               </div>
             </div>
@@ -416,7 +544,7 @@ function App() {
             </div>
             <div className="flex-1 flex flex-col items-center gap-2">
               <div className="flex items-center gap-6">
-                 <button onClick={() => setIsPlaying(!isPlaying)} className="w-10 h-10 bg-white rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition-all shadow-lg">
+                <button onClick={() => setIsPlaying(!isPlaying)} className="w-10 h-10 bg-white rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition-all shadow-lg">
                   {isPlaying ? <Pause className="w-5 h-5 text-black" /> : <Play className="w-5 h-5 text-black ml-1" />}
                 </button>
               </div>
@@ -432,27 +560,52 @@ function App() {
           </div>
         )}
 
-        <CartSidebar 
-          isOpen={isCartOpen} 
-          onClose={() => setIsCartOpen(false)} 
+        <CartSidebar
+          isOpen={isCartOpen}
+          onClose={() => setIsCartOpen(false)}
           items={cart}
           onRemove={(url) => setCart(cart.filter(c => c.spotify_url !== url))}
           onClear={() => setCart([])}
-          onSavePlaylist={(title, desc) => {
-            const newP: Playlist = {
-              playlist_no: Date.now(),
-              user_no: user.user_no,
-              title,
-              content: desc,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-              music_items: cart
-            };
-            setPlaylists([newP, ...playlists]);
-            setCart([]);
-            setIsCartOpen(false);
-            setView('library');
+          onSavePlaylist={handleSavePlaylist}
+        />
+
+        <PlaylistDetail
+          playlist={selectedPlaylist}
+          isOpen={isDetailOpen}
+          onClose={() => setIsDetailOpen(false)}
+          onRemoveMusic={handleRemoveMusic}
+          onDeletePlaylist={handleDeletePlaylist}
+          onEdit={() => {
+            setIsEditMode(true);
+            setIsCreateModalOpen(true);
           }}
+        />
+
+        <CreatePlaylistModal
+          isOpen={isCreateModalOpen}
+          onClose={() => {
+            setIsCreateModalOpen(false);
+            setIsEditMode(false);
+          }}
+          onSave={async (title, content) => {
+            if (isEditMode && selectedPlaylist) {
+              // 수정 모드
+              const res = await updatePlaylist(selectedPlaylist.playlist_no, title, content);
+              if (res.success && user) {
+                await fetchPlaylists(user.user_no);
+                setIsCreateModalOpen(false);
+                setIsEditMode(false);
+                setIsDetailOpen(false);
+              }
+            } else {
+              // 생성 모드
+              await handleSavePlaylist(title, content);
+              setIsCreateModalOpen(false);
+            }
+          }}
+          initialTitle={isEditMode ? selectedPlaylist?.title : ''}
+          initialContent={isEditMode ? selectedPlaylist?.content || '' : ''}
+          mode={isEditMode ? 'edit' : 'create'}
         />
       </main>
     </div>

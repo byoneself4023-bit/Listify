@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, send_from_directory
 from flask_cors import CORS
 from dotenv import load_dotenv
 import os
@@ -57,6 +57,11 @@ def index():
 @app.route('/test')
 def test():
     return {'message': 'hello'}
+
+@app.route('/test_api.html')
+def serve_test_page():
+    return send_from_directory(BASE_DIR, 'test_api.html')
+
 
 @app.route('/health')
 def health():

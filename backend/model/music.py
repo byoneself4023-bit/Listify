@@ -1,31 +1,9 @@
-from db import connect_to_mysql
-import os
-import pymysql
-
-def get_conn():
-    conn = connect_to_mysql(
-        os.getenv("DB_HOST"),
-        int(os.getenv("DB_PORT")),
-        os.getenv("DB_USER"),
-        os.getenv("DB_PASSWORD"),
-        os.getenv("DB_DATABASE")
-    )
-
-    if conn is None:
-        raise RuntimeError(
-            f"DB 연결 실패 - "
-            f"HOST={os.getenv('DB_HOST')}, "
-            f"PORT={os.getenv('DB_PORT')}, "
-            f"USER={os.getenv('DB_USER')}, "
-            f"DB={os.getenv('DB_DATABASE')}"
-        )
-
-    return conn
+from db import get_connection
 
 
 def find_by_spotify_url(spotify_url):
     """spotify_url로 중복 체크"""
-    conn = get_conn()
+    conn = get_connection()
     try:
         with conn.cursor() as c:
             c.execute("SELECT * FROM music WHERE spotify_url = %s", (spotify_url,))
@@ -35,7 +13,7 @@ def find_by_spotify_url(spotify_url):
 
 
 def insert_music(m):
-    conn = get_conn()
+    conn = get_connection()
     try:
         with conn.cursor() as c:
             sql = """
@@ -55,16 +33,17 @@ def insert_music(m):
                 m['genre_no']
             ))
             conn.commit()
-            print(f" 저장 성공: {m['track_name']}")  # 디버그 로그
+            print(f"  ✅ 저장: {m['track_name']}")
             return c.lastrowid
     except Exception as e:
-        print(f" 저장 실패: {m['track_name']} - {e}")  # 에러 로그
+        print(f"  ❌ 저장 실패: {m['track_name']} - {e}")
         return None
     finally:
         conn.close()
 
+
 def find_all(category=None, value=None):
-    conn = get_conn()
+    conn = get_connection()
     try:
         with conn.cursor() as c:
             if category == "genre":
@@ -84,7 +63,7 @@ def find_all(category=None, value=None):
 
 
 def find_by_genre(genre_name):
-    conn = get_conn()
+    conn = get_connection()
     try:
         with conn.cursor() as c:
             sql = """
@@ -101,7 +80,7 @@ def find_by_genre(genre_name):
 
 
 def find_genre_no_by_name(name):
-    conn = get_conn()
+    conn = get_connection()
     try:
         with conn.cursor() as c:
             c.execute(
@@ -112,9 +91,10 @@ def find_genre_no_by_name(name):
             return row['genre_no'] if row else None
     finally:
         conn.close()
-        
+
+
 def find_by_spotify_track_id(track_id):
-    conn = get_conn()
+    conn = get_connection()
     try:
         with conn.cursor() as c:
             c.execute(

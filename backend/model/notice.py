@@ -1,16 +1,4 @@
-from db import connect_to_mysql
-import os
-
-
-def get_connection():
-    """데이터베이스 연결"""
-    return connect_to_mysql(
-        host=os.getenv('DB_HOST', 'localhost'),
-        port=int(os.getenv('DB_PORT', 3306)),
-        user=os.getenv('DB_USER', 'root'),
-        password=os.getenv('DB_PASSWORD', '1234'),
-        database=os.getenv('DB_DATABASE', 'listify')
-    )
+from db import get_connection
 
 
 def insert_notice(user_no: int, title: str, content: str) -> int:

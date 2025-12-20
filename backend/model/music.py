@@ -1,179 +1,114 @@
-# -*- coding: utf-8 -*-
 from db import connect_to_mysql
 import os
+import pymysql
 
-
-def get_connection():
-    """데이터베이스 연결"""
-    return connect_to_mysql(
-        host=os.getenv('DB_HOST', 'localhost'),
-        port=int(os.getenv('DB_PORT', 3306)),
-        user=os.getenv('DB_USER', 'root'),
-        password=os.getenv('DB_PASSWORD', '1234'),
-        database=os.getenv('DB_DATABASE', 'listify')
+def get_conn():
+    conn = connect_to_mysql(
+        os.getenv("DB_HOST"),
+        int(os.getenv("DB_PORT")),
+        os.getenv("DB_USER"),
+        os.getenv("DB_PASSWORD"),
+        os.getenv("DB_DATABASE")
     )
 
+    if conn is None:
+        raise RuntimeError(
+            f"DB 연결 실패 - "
+            f"HOST={os.getenv('DB_HOST')}, "
+            f"PORT={os.getenv('DB_PORT')}, "
+            f"USER={os.getenv('DB_USER')}, "
+            f"DB={os.getenv('DB_DATABASE')}"
+        )
 
-def insert_music(spotify_track_id, track_name, artist_name, album_name,
-                 album_image_url, duration_ms, popularity, spotify_url,
-                 release_date=None, release_year=None, genre_no=None):
-    """음악 정보 저장"""
-    conn = get_connection()
+    return conn
+
+
+def find_by_spotify_url(spotify_url):
+    """spotify_url로 중복 체크"""
+    conn = get_conn()
     try:
-        with conn.cursor() as cursor:
+        with conn.cursor() as c:
+            c.execute("SELECT * FROM music WHERE spotify_url = %s", (spotify_url,))
+            return c.fetchone()
+    finally:
+        conn.close()
+
+
+def insert_music(m):
+    conn = get_conn()
+    try:
+        with conn.cursor() as c:
             sql = """
-                INSERT INTO music (
-                    spotify_track_id, track_name, artist_name, album_name,
-                    album_image_url, duration_ms, popularity, spotify_url,
-                    release_date, release_year, genre_no
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO music
+            (track_name, artist_name, album_name, album_image_url,
+             duration_ms, popularity, spotify_url, genre_no)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
             """
-            cursor.execute(sql, (
-                spotify_track_id, track_name, artist_name, album_name,
-                album_image_url, duration_ms, popularity, spotify_url,
-                release_date, release_year, genre_no
+            c.execute(sql, (
+                m['track_name'],
+                m['artist_name'],
+                m['album_name'],
+                m['album_image_url'],
+                m['duration_ms'],
+                m['popularity'],
+                m['spotify_url'],
+                m['genre_no']
             ))
             conn.commit()
-            return cursor.lastrowid
+            print(f" 저장 성공: {m['track_name']}")  # 디버그 로그
+            return c.lastrowid
     except Exception as e:
-        print(f"Error inserting music: {e}")
+        print(f" 저장 실패: {m['track_name']} - {e}")  # 에러 로그
         return None
     finally:
         conn.close()
 
-
-def find_by_spotify_track_id(spotify_track_id):
-    """Spotify Track ID로 음악 조회"""
-    conn = get_connection()
+def find_all(category=None, value=None):
+    conn = get_conn()
     try:
-        with conn.cursor() as cursor:
-            sql = "SELECT * FROM music WHERE spotify_track_id = %s"
-            cursor.execute(sql, (spotify_track_id,))
-            return cursor.fetchone()
+        with conn.cursor() as c:
+            if category == "genre":
+                sql = """
+                SELECT m.*
+                FROM music m
+                JOIN genre g ON m.genre_no = g.genre_no
+                WHERE g.name = %s
+                ORDER BY m.popularity DESC
+                """
+                c.execute(sql, (value,))
+            else:
+                c.execute("SELECT * FROM music ORDER BY popularity DESC")
+            return c.fetchall()
     finally:
         conn.close()
 
 
-def find_by_music_no(music_no):
-    """Music No로 음악 조회"""
-    conn = get_connection()
+def find_by_genre(genre_name):
+    conn = get_conn()
     try:
-        with conn.cursor() as cursor:
-            sql = "SELECT * FROM music WHERE music_no = %s"
-            cursor.execute(sql, (music_no,))
-            return cursor.fetchone()
-    finally:
-        conn.close()
-
-
-def search_music(query, limit=20):
-    """음악 검색 (track_name, artist_name, album_name)"""
-    conn = get_connection()
-    try:
-        with conn.cursor() as cursor:
+        with conn.cursor() as c:
             sql = """
-                SELECT * FROM music
-                WHERE track_name LIKE %s
-                   OR artist_name LIKE %s
-                   OR album_name LIKE %s
-                ORDER BY popularity DESC
-                LIMIT %s
+            SELECT m.*
+            FROM music m
+            JOIN genre g ON m.genre_no = g.genre_no
+            WHERE g.name = %s
+            ORDER BY m.popularity DESC
             """
-            search_pattern = f"%{query}%"
-            cursor.execute(sql, (search_pattern, search_pattern, search_pattern, limit))
-            return cursor.fetchall()
+            c.execute(sql, (genre_name,))
+            return c.fetchall()
     finally:
         conn.close()
 
 
-def list_all(limit=50, offset=0):
-    """전체 음악 목록 조회 (페이지네이션)"""
-    conn = get_connection()
+def find_genre_no_by_name(name):
+    conn = get_conn()
     try:
-        with conn.cursor() as cursor:
-            sql = """
-                SELECT * FROM music
-                ORDER BY created_at DESC, popularity DESC
-                LIMIT %s OFFSET %s
-            """
-            cursor.execute(sql, (limit, offset))
-            return cursor.fetchall()
-    finally:
-        conn.close()
-
-
-def list_by_artist(artist_name, limit=50):
-    """아티스트별 음악 목록 조회"""
-    conn = get_connection()
-    try:
-        with conn.cursor() as cursor:
-            sql = """
-                SELECT * FROM music
-                WHERE artist_name LIKE %s
-                ORDER BY popularity DESC
-                LIMIT %s
-            """
-            cursor.execute(sql, (f"%{artist_name}%", limit))
-            return cursor.fetchall()
-    finally:
-        conn.close()
-
-
-def list_by_genre(genre_no, limit=50):
-    """장르별 음악 목록 조회"""
-    conn = get_connection()
-    try:
-        with conn.cursor() as cursor:
-            sql = """
-                SELECT * FROM music
-                WHERE genre_no = %s
-                ORDER BY popularity DESC
-                LIMIT %s
-            """
-            cursor.execute(sql, (genre_no, limit))
-            return cursor.fetchall()
-    finally:
-        conn.close()
-
-
-def list_by_year(year, limit=50):
-    """연도별 음악 목록 조회"""
-    conn = get_connection()
-    try:
-        with conn.cursor() as cursor:
-            sql = """
-                SELECT * FROM music
-                WHERE release_year = %s
-                ORDER BY popularity DESC
-                LIMIT %s
-            """
-            cursor.execute(sql, (year, limit))
-            return cursor.fetchall()
-    finally:
-        conn.close()
-
-
-def count_all():
-    """전체 음악 개수"""
-    conn = get_connection()
-    try:
-        with conn.cursor() as cursor:
-            sql = "SELECT COUNT(*) as count FROM music"
-            cursor.execute(sql)
-            result = cursor.fetchone()
-            return result['count'] if result else 0
-    finally:
-        conn.close()
-
-
-def delete_music(music_no):
-    """음악 삭제"""
-    conn = get_connection()
-    try:
-        with conn.cursor() as cursor:
-            sql = "DELETE FROM music WHERE music_no = %s"
-            cursor.execute(sql, (music_no,))
-            conn.commit()
-            return cursor.rowcount > 0
+        with conn.cursor() as c:
+            c.execute(
+                "SELECT genre_no FROM genre WHERE name = %s",
+                (name,)
+            )
+            row = c.fetchone()
+            return row['genre_no'] if row else None
     finally:
         conn.close()

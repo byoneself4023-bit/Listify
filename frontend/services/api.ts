@@ -1,19 +1,35 @@
-import axios from 'axios';
+// frontend/services/api.ts
+import { API_URL } from '../constants';
+import { getToken } from './authService';
 
-const api = axios.create({
-  baseURL: 'http://localhost:5001',
-  headers: {
+type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
+
+async function request<T>(
+  method: HttpMethod,
+  endpoint: string,
+  data?: any
+): Promise<T> {
+  const token = getToken();
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-  },
-});
+  };
 
-// 응답 인터셉터 (data 바로 쓰게)
-api.interceptors.response.use(
-  response => response,
-  error => {
-    console.error('API Error:', error);
-    return Promise.reject(error);
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
   }
-);
 
-export default api;
+  const res = await fetch(`${API_URL}${endpoint}`, {
+    method,
+    headers,
+    body: data ? JSON.stringify(data) : undefined,
+  });
+
+  return res.json();
+}
+
+export const api = {
+  get: <T>(endpoint: string) => request<T>('GET', endpoint),
+  post: <T>(endpoint: string, data?: any) => request<T>('POST', endpoint, data),
+  put: <T>(endpoint: string, data?: any) => request<T>('PUT', endpoint, data),
+  delete: <T>(endpoint: string) => request<T>('DELETE', endpoint),
+};

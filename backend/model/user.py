@@ -1,14 +1,6 @@
-from db import connect_to_mysql
+from db import get_connection
 import os
 
-def get_connection():
-    return connect_to_mysql(
-        host=os.getenv('DB_HOST', 'localhost'),
-        port=int(os.getenv('DB_PORT', 3306)),
-        user=os.getenv('DB_USER', 'root'),
-        password=os.getenv('DB_PASSWORD', '1234'),
-        database=os.getenv('DB_DATABASE', 'listify')
-    )
 
 def find_by_user_no(user_no):
     """user_no로 유저 조회"""
@@ -25,6 +17,7 @@ def find_by_user_no(user_no):
     finally:
         conn.close()
 
+
 def update_nickname(user_no, nickname):
     """닉네임 수정"""
     conn = get_connection()
@@ -40,6 +33,7 @@ def update_nickname(user_no, nickname):
             return cursor.rowcount > 0
     finally:
         conn.close()
+
 
 def soft_delete(user_no):
     """계정 탈퇴 (soft delete)"""

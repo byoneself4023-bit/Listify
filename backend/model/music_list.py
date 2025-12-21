@@ -1,17 +1,5 @@
 # -*- coding: utf-8 -*-
-from db import connect_to_mysql
-import os
-
-
-def get_connection():
-    """데이터베이스 연결"""
-    return connect_to_mysql(
-        host=os.getenv('DB_HOST', 'localhost'),
-        port=int(os.getenv('DB_PORT', 3306)),
-        user=os.getenv('DB_USER', 'root'),
-        password=os.getenv('DB_PASSWORD', '1234'),
-        database=os.getenv('DB_DATABASE', 'listify')
-    )
+from db import get_connection
 
 
 def insert_music_to_playlist(playlist_no: int, music_no: int) -> bool:
@@ -61,7 +49,8 @@ def find_by_playlist_no(playlist_no: int):
     try:
         with conn.cursor() as cursor:
             sql = """
-                SELECT ml.playlist_no, ml.music_no, m.track_name, m.artist_name, m.album_name, m.duration_ms
+                SELECT ml.playlist_no, ml.music_no, m.track_name, m.artist_name, 
+                       m.album_name, m.album_image_url, m.duration_ms
                 FROM music_list ml
                 LEFT JOIN music m ON ml.music_no = m.music_no
                 WHERE ml.playlist_no = %s

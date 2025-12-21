@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, send_from_directory
 from flask_cors import CORS
 from dotenv import load_dotenv
 import os
@@ -19,7 +19,13 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "*"}})
+CORS(app, resources={
+    r"/*": {
+        "origins": "*",
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"]
+    }
+})
 
 
 # Blueprint 등록
@@ -57,6 +63,11 @@ def index():
 @app.route('/test')
 def test():
     return {'message': 'hello'}
+
+@app.route('/test_api.html')
+def serve_test_page():
+    return send_from_directory(BASE_DIR, 'test_api.html')
+
 
 @app.route('/health')
 def health():

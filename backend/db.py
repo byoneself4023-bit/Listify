@@ -3,8 +3,6 @@ import os
 from dotenv import load_dotenv
 from dbutils.pooled_db import PooledDB
 
-load_dotenv()
-
 class DatabaseManager:
     """싱글톤 패턴의 DB Connection Pool 관리자"""
     _pool = None

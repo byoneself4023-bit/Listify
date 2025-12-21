@@ -1,8 +1,11 @@
 from db import get_connection
+from db import connect_to_mysql
+import os
 
 
+
+# 공지 생성, 생성된 notice_no 반환
 def insert_notice(user_no: int, title: str, content: str) -> int:
-    """공지 생성, 생성된 notice_no 반환"""
     conn = get_connection()
     try:
         with conn.cursor() as cursor:
@@ -16,9 +19,8 @@ def insert_notice(user_no: int, title: str, content: str) -> int:
     finally:
         conn.close()
 
-
+# 공지 수정, 성공 여부 반환
 def update_notice(notice_no: int, title: str, content: str) -> bool:
-    """공지 수정, 성공 여부 반환"""
     conn = get_connection()
     try:
         with conn.cursor() as cursor:
@@ -32,9 +34,8 @@ def update_notice(notice_no: int, title: str, content: str) -> bool:
     finally:
         conn.close()
 
-
+# 공지 삭제, 성공 여부 반환
 def delete_notice(notice_no: int) -> bool:
-    """공지 삭제, 성공 여부 반환"""
     conn = get_connection()
     try:
         with conn.cursor() as cursor:
@@ -45,9 +46,8 @@ def delete_notice(notice_no: int) -> bool:
     finally:
         conn.close()
 
-
+#  단건 조회 (원본 notice 테이블)
 def find_by_notice_no(notice_no: int):
-    """단건 조회 (원본 notice 테이블)"""
     conn = get_connection()
     try:
         with conn.cursor() as cursor:
@@ -57,14 +57,13 @@ def find_by_notice_no(notice_no: int):
     finally:
         conn.close()
 
-
+# 리스트 조회(작성자 닉네임 포함) 
 def list_all_with_user():
-    """리스트 조회(작성자 닉네임 포함)"""
     conn = get_connection()
     try:
         with conn.cursor() as cursor:
             sql = (
-                "SELECT n.notice_no, n.user_no, n.title, n.content,"
+                "SELECT n.notice_no, n.user_no, n.title,"
                 " n.created_at, n.updated_at, u.nickname"
                 " FROM notice n LEFT JOIN user u ON n.user_no = u.user_no"
                 " ORDER BY n.created_at DESC"
@@ -74,9 +73,8 @@ def list_all_with_user():
     finally:
         conn.close()
 
-
+# 상세 조회(작성자 닉네임 포함)
 def find_detail_with_user(notice_no: int):
-    """상세 조회(작성자 닉네임 포함)"""
     conn = get_connection()
     try:
         with conn.cursor() as cursor:

@@ -1,5 +1,9 @@
 // frontend/App.tsx
 import React, { useState, useEffect } from 'react';
+import SearchPage from './pages/SearchPage';
+
+
+
 
 import {
   Home, Library, Search as SearchIcon, User as UserIcon, LogOut,
@@ -8,7 +12,7 @@ import {
 } from 'lucide-react';
 
 import { Music, Playlist, AppView, User } from './types';
-import { searchMusic, getAllMusic, getTop50Music } from './services/musicService';
+import { searchMusic, getAllMusic, getTop50Music,  getMusicByGenre } from './services/musicService';
 import { login, register, logout as logoutApi, getToken, verifyToken } from './services/authService';
 import { getUserPlaylists, createPlaylist, updatePlaylist, deletePlaylist, addMusicToPlaylist, removeMusicFromPlaylist, getPlaylistMusic } from './services/playlistService';
 import { MOCK_NOTICES, MOCK_STATS } from './constants';
@@ -155,22 +159,108 @@ function App() {
   }, []);
 
   // 백엔드 API로 음악 검색
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!searchQuery.trim()) return;
+const handleSearch = async (e: React.FormEvent) => {
+  e.preventDefault();
+  if (!searchQuery.trim()) return;
 
-    setIsSearching(true);
-    try {
-      const response = await searchMusic(searchQuery);
-      if (response.success && response.data) {
-        setSearchResults(response.data);
+  setIsSearching(true);
+
+  try {
+    // ✅ 1. #으로 시작하면 "장르 검색"
+    if (searchQuery.startsWith('#')) {
+      let rawGenre = searchQuery.slice(1).trim().toLowerCase();
+
+      // ✅ 2. 장르 별칭 → DB 장르명 매핑
+      const GENRE_ALIAS: Record<string, string> = {
+        'kpop': 'K-Pop',
+        'k-pop': 'K-Pop',
+        '케이팝': 'K-Pop',
+
+        'pop': 'Pop',
+
+        'hiphop': 'Hip-Hop',
+        '힙합': 'Hip-Hop',
+
+        'rnb': 'R&B',
+        '알앤비': 'R&B',
+
+        'jazz': 'Jazz',
+        '재즈': 'Jazz',
+
+        'rock': 'Rock',
+        '락': 'Rock',
+        '록': 'Rock',
+
+        'classical': 'Classical',
+        '클래식': 'Classical',
+
+        'electronic': 'Electronic',
+        '일렉트로닉': 'Electronic',
+
+        'indie': 'Indie',
+        '인디': 'Indie',
+
+        'metal': 'Metal',
+        '메탈': 'Metal'
+      };
+
+      // 🎵 장르 버튼 클릭 시 검색
+
+
+
+
+      const genre = GENRE_ALIAS[rawGenre] ?? searchQuery.slice(1);
+
+      // ✅ 3. DB 장르 검색 API 호출
+      const res = await getMusicByGenre(genre);
+
+      if (res.success && res.data) {
+        setSearchResults(res.data);
+      } else {
+        setSearchResults([]);
       }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsSearching(false);
     }
-  };
+    // ✅ 4. 일반 검색 (가수 / 곡 / 앨범 → Spotify)
+    else {
+      const res = await searchMusic(searchQuery);
+
+      if (res.success && res.data) {
+        setSearchResults(res.data);
+      } else {
+        setSearchResults([]);
+      }
+    }
+  } catch (err) {
+    console.error(err);
+    setSearchResults([]);
+  } finally {
+    setIsSearching(false);
+  }
+};
+
+// 🎵 장르 버튼 클릭 → DB 장르 검색
+const handleSearchByGenre = async (genre: string) => {
+  setSearchQuery(genre);
+  setIsSearching(true);
+
+  try {
+    const res = await getMusicByGenre(genre);
+    if (res.success && res.data) {
+      setSearchResults(res.data);
+    } else {
+      setSearchResults([]);
+    }
+  } catch (err) {
+    console.error('장르 검색 실패:', err);
+    setSearchResults([]);
+  } finally {
+    setIsSearching(false);
+  }
+};
+
+
+
+
 
   const toggleCart = (song: Music) => {
     const isInCart = cart.some(c => c.spotify_url === song.spotify_url);
@@ -487,6 +577,7 @@ function App() {
           )}
 
           {view === 'search' && (
+
             <div className="space-y-8 animate-in fade-in duration-500">
               <div className="max-w-2xl mx-auto">
                 <form onSubmit={handleSearch} className="relative group">
@@ -545,6 +636,7 @@ function App() {
               )}
             </div>
           )}
+
 
           {view === 'library' && (
             <div className="space-y-6">
@@ -682,4 +774,6 @@ function App() {
   );
 }
 
+
 export default App;
+

@@ -33,6 +33,7 @@ function App() {
     );
   };
 
+  // 🔐 로그인 / 회원가입 화면
   if (!user) {
     return (
       <>
@@ -52,8 +53,10 @@ function App() {
     );
   }
 
+  // ✅ 메인 레이아웃
   return (
-    <div className="flex h-screen bg-black text-white">
+    <div className="flex h-screen bg-black text-white overflow-hidden">
+      {/* 사이드바 (고정) */}
       <Sidebar
         view={view}
         onViewChange={setView}
@@ -63,10 +66,12 @@ function App() {
         onLogout={handleLogout}
       />
 
-      <main className="flex-1 flex flex-col">
+      {/* 메인 영역 */}
+      <main className="flex-1 flex flex-col overflow-hidden">
         <Header viewTitle={view} user={user} />
 
-        <div className="flex-1 p-8">
+        {/* 🔥 이 영역만 스크롤 */}
+        <div className="flex-1 overflow-y-auto p-8">
           {view === 'search' && (
             <SearchPage
               searchQuery={searchQuery}
@@ -94,6 +99,7 @@ function App() {
           {view === 'notices' && <NoticesPage />}
         </div>
 
+        {/* 장바구니 사이드바 */}
         <CartSidebar
           isOpen={isCartOpen}
           onClose={() => setIsCartOpen(false)}
@@ -119,7 +125,6 @@ function App() {
             setView('library');
           }}
         />
-
       </main>
     </div>
   );

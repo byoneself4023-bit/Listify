@@ -1,0 +1,67 @@
+
+=== music ===
+  music_no                  int(11)                   PRI   auto_increment
+  spotify_track_id          varchar(50)               UNI   
+  album_image_url           varchar(1000)                   
+  album_name                varchar(500)                    
+  artist_name               varchar(500)                    
+  duration_ms               int(11)                         
+  popularity                int(11)                         
+  spotify_url               varchar(255)                    
+  track_name                varchar(500)                    
+  release_date              date                            
+  release_year              int(11)                         
+  genre_no                  int(11)                   MUL   
+  --- Sample Data ---
+  {'music_no': 1, 'spotify_track_id': None, 'album_image_url': 'https://i.scdn.co/image/ab67616d0000b2733d09075f6c7fabe9a7234cb3', 'album_name': 'NOT CUTE ANYMORE', 'artist_name': 'ILLIT', 'duration_ms': 131997, 'popularity': 87, 'spotify_url': 'https://open.spotify.com/track/1k0JAiH11gHL9dc5dfQjQr', 'track_name': 'NOT CUTE ANYMORE', 'release_date': None, 'release_year': None, 'genre_no': 8}
+  {'music_no': 2, 'spotify_track_id': None, 'album_image_url': 'https://i.scdn.co/image/ab67616d0000b273f02c451189a709b9a952aaec', 'album_name': 'MUSE', 'artist_name': 'Jimin', 'duration_ms': 170887, 'popularity': 87, 'spotify_url': 'https://open.spotify.com/track/7tI8dRuH2Yc6RuoTjxo4dU', 'track_name': 'Who', 'release_date': None, 'release_year': None, 'genre_no': 8}
+
+=== music_list ===
+  playlist_no               int(11)                   PRI   
+  music_no                  int(11)                   PRI   
+
+=== playlist ===
+  playlist_no               int(11)                   PRI   auto_increment
+  user_no                   int(11)                   MUL   
+  title                     varchar(40)                     
+  content                   text                            
+  created_at                datetime                        
+  updated_at                datetime                        on update current_timestamp()
+  --- Sample Data ---
+  {'playlist_no': 3, 'user_no': 5, 'title': '테스트플레이리스트1', 'content': '테스트플레이리스트1테스트플레이리스트1 테스트플레이리스트1 테스트플레이리스트1 테스트플레이리스트1', 'created_at': datetime.datetime(2025, 12, 21, 6, 30, 19), 'updated_at': datetime.datetime(2025, 12, 21, 6, 30, 19)}
+
+=== genre ===
+  genre_no                  int(11)                   PRI   auto_increment
+  name                      varchar(50)               UNI   
+  --- Sample Data ---
+  {'genre_no': 6, 'name': 'Classical'}
+  {'genre_no': 7, 'name': 'Electronic'}
+
+=== user ===
+  user_no                   int(11)                   PRI   auto_increment
+  role_no                   int(11)                   MUL   
+  email                     varchar(50)                     
+  password                  varchar(255)                    
+  nickname                  varchar(30)                     
+  created_at                datetime                        
+  updated_at                datetime                        on update current_timestamp()
+  is_deleted                tinyint(1)                      
+  profile_url               varchar(255)                    
+  --- Sample Data ---
+  {'user_no': 4, 'role_no': 1, 'email': 'test@listify.com', 'password': '$2b$12$ui1xXfu8VT6hzNJRzoGRpOuU0ZjVivV4r3.PbcqvYBWAaT2GqgFfi', 'nickname': '테스트유저', 'created_at': datetime.datetime(2025, 12, 20, 15, 59, 30), 'updated_at': datetime.datetime(2025, 12, 20, 15, 59, 30), 'is_deleted': 0, 'profile_url': None}
+  {'user_no': 5, 'role_no': 1, 'email': 'play@listify.com', 'password': '$2b$12$qEeog75twlDO9OhdvK3qsOAR71n2almEISrgFW8HW4FrBnGPkU.Uy', 'nickname': '테스트유저2', 'created_at': datetime.datetime(2025, 12, 20, 16, 0, 33), 'updated_at': datetime.datetime(2025, 12, 20, 16, 0, 33), 'is_deleted': 0, 'profile_url': None}
+
+=== role ===
+  role_no                   int(11)                   PRI   auto_increment
+  name                      varchar(20)                     
+  --- Sample Data ---
+  {'role_no': 1, 'name': 'USER'}
+  {'role_no': 2, 'name': 'ADMIN'}
+
+=== notice ===
+  notice_no                 int(11)                   PRI   auto_increment
+  user_no                   int(11)                   MUL   
+  title                     varchar(50)                     
+  content                   text                            
+  created_at                datetime                        
+  updated_at                datetime                        on update current_timestamp()

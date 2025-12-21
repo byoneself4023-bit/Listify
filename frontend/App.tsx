@@ -1,12 +1,17 @@
 import React, { useState, useEffect } from 'react';
+
 import { 
   Home, Library, Search as SearchIcon, User as UserIcon, LogOut, 
   Settings, Bell, Plus, Play, Pause, Music as MusicIcon, 
   Search, Loader2, Heart, Check, Calendar, Clock, Edit3, Trash2
+
 } from 'lucide-react';
 import { Music, Playlist, AppView, User } from './types';
-import { getAccessToken, getPopularTracks, searchSpotifyTracks } from './services/spotifyService';
+import { searchMusic, getAllMusic, getTop50Music } from './services/musicService';
 import { login, register, logout as logoutApi, getToken, verifyToken } from './services/authService';
+
+import { getUserPlaylists, createPlaylist, updatePlaylist, deletePlaylist, addMusicToPlaylist, removeMusicFromPlaylist, getPlaylistMusic } from './services/playlistService';
+import { MOCK_NOTICES, MOCK_STATS } from './constants';
 import { getUserProfile, updateUserProfile, deleteAccount } from './services/userService';
 import { getUserPlaylists } from './services/playlistService';
 import { SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, MOCK_NOTICES, MOCK_STATS } from './constants';
@@ -16,6 +21,8 @@ import PlaylistCard from './components/PlaylistCard';
 import SettingsModal from './components/SettingsModal';
 import ProfileEditModal from './components/ProfileEditModal';
 import CartSidebar from './components/CartSidebar';
+import PlaylistDetail from './components/PlaylistDetail';
+import CreatePlaylistModal from './components/CreatePlaylistModal';
 import { GenreDistribution, WeeklyActivity, AudioRadar } from './components/Charts';
 import { Login } from './components/Login';
 import { Register } from './components/Register';
@@ -27,7 +34,6 @@ function App() {
   const [user, setUser] = useState<User | null>(null);
   const [authView, setAuthView] = useState<AuthView>('login');
   const [view, setView] = useState<AppView>('home');
-  const [spotifyToken, setSpotifyToken] = useState<string | null>(null);
   const [songs, setSongs] = useState<Music[]>([]);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -35,7 +41,7 @@ function App() {
   const [playlistCount, setPlaylistCount] = useState(0);
   const [currentSong, setCurrentSong] = useState<Music | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  
+
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Music[]>([]);
@@ -44,6 +50,14 @@ function App() {
   // Cart state
   const [cart, setCart] = useState<Music[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
+
+  // Playlist detail & modal state
+  const [selectedPlaylist, setSelectedPlaylist] = useState<Playlist | null>(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isAuthChecking, setIsAuthChecking] = useState(true);
 
   // 자동 로그인 체크
   useEffect(() => {
@@ -63,65 +77,102 @@ function App() {
             created_at: new Date().toISOString()
           });
           setAuthView(null);
+          // 플레이리스트 목록 불러오기
+          fetchPlaylists(userNo);
         }
       }
+      setIsAuthChecking(false);
     };
     checkAuth();
   }, []);
 
-  // 프로필 및 플레이리스트 데이터 로드
-  useEffect(() => {
-    const loadUserData = async () => {
-      if (!user) return;
 
-      try {
-        // 프로필 정보 로드
-        const profileResponse = await getUserProfile(user.user_no);
-        if (profileResponse.success) {
-          setUser(prev => prev ? {
-            ...prev,
-            email: profileResponse.data.email,
-            nickname: profileResponse.data.nickname,
-            profile_url: profileResponse.data.profile_url
-          } : null);
-        }
+// 플레이리스트 목록 조회 함수 (음악 포함)
+const fetchPlaylists = async (userNo: number) => {
+  setIsLoading(true);
+  try {
+    const response = await getUserPlaylists(userNo);
+    if (response.success && response.data) {
+      const playlistsWithMusic = await Promise.all(
+        response.data.map(async (p: Playlist) => {
+          const musicRes = await getPlaylistMusic(p.playlist_no);
+          const musicData = musicRes.data as any;
 
-        // 플레이리스트 개수 로드
-        const playlistResponse = await getUserPlaylists(user.user_no);
-        if (playlistResponse.success) {
-          setPlaylists(playlistResponse.data || []);
-          setPlaylistCount(playlistResponse.data?.length || 0);
-        }
-      } catch (error) {
-        console.error('사용자 데이터 로드 실패:', error);
+          return {
+            ...p,
+            music_items:
+              musicRes.success && musicData?.music_list
+                ? musicData.music_list
+                : [],
+          };
+        })
+      );
+      setPlaylists(playlistsWithMusic);
+      setPlaylistCount(playlistsWithMusic.length);
+    }
+  } catch (e) {
+    console.error('플레이리스트 조회 실패:', e);
+  } finally {
+    setIsLoading(false);
+  }
+};
+
+// 프로필 및 플레이리스트 데이터 로드
+useEffect(() => {
+  const loadUserData = async () => {
+    if (!user) return;
+
+    try {
+      // 프로필 정보만 여기서 로드
+      const profileResponse = await getUserProfile(user.user_no);
+      if (profileResponse.success) {
+        setUser(prev =>
+          prev
+            ? {
+                ...prev,
+                email: profileResponse.data.email,
+                nickname: profileResponse.data.nickname,
+                profile_url: profileResponse.data.profile_url,
+              }
+            : null
+        );
       }
-    };
 
-    loadUserData();
-  }, [user?.user_no]);
+      // 플레이리스트는 통합 함수 사용
+      await fetchPlaylists(user.user_no);
+    } catch (error) {
+      console.error('사용자 데이터 로드 실패:', error);
+    }
+  };
 
+  loadUserData();
+}, [user?.user_no]);
   useEffect(() => {
     const init = async () => {
       try {
-        const data = await getAccessToken(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET);
-        setSpotifyToken(data.access_token);
-        const popular = await getPopularTracks(data.access_token);
-        setSongs(popular);
-      } catch (e) { 
-        console.error(e); 
+        // 백엔드 API로 전체 음악 목록 가져오기
+        const response = await getAllMusic();
+        if (response.success && response.data) {
+          setSongs(response.data);
+        }
+      } catch (e) {
+        console.error(e);
       }
     };
     init();
   }, []);
 
+  // 백엔드 API로 음악 검색 (검색 결과는 자동으로 DB에 저장됨)
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!searchQuery.trim() || !spotifyToken) return;
-    
+    if (!searchQuery.trim()) return;
+
     setIsSearching(true);
     try {
-      const results = await searchSpotifyTracks(searchQuery, spotifyToken, 30);
-      setSearchResults(results);
+      const response = await searchMusic(searchQuery);
+      if (response.success && response.data) {
+        setSearchResults(response.data);
+      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -138,6 +189,14 @@ function App() {
     }
   };
 
+  // 인증 확인 중 로딩 화면
+  if (isAuthChecking) {
+    return (
+      <div className="flex h-screen bg-black text-white items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
   const handleProfileUpdate = async (nickname: string) => {
     if (!user) return;
 
@@ -181,7 +240,7 @@ function App() {
     return (
       <>
         {authView === 'login' && (
-          <Login 
+          <Login
             onLoginSuccess={(userNo, nickname) => {
               setUser({
                 user_no: userNo,
@@ -192,12 +251,14 @@ function App() {
                 created_at: new Date().toISOString()
               });
               setAuthView(null);
+              // 로그인 후 플레이리스트 목록 불러오기
+              fetchPlaylists(userNo);
             }}
             onSwitchToRegister={() => setAuthView('register')}
           />
         )}
         {authView === 'register' && (
-          <Register 
+          <Register
             onRegisterSuccess={() => setAuthView('login')}
             onSwitchToLogin={() => setAuthView('login')}
           />
@@ -208,12 +269,12 @@ function App() {
 
   return (
     <div className="flex h-screen bg-black text-white overflow-hidden">
-      <SettingsModal 
-        isOpen={isSettingsOpen} 
+      <SettingsModal
+        isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         onSave={(id, secret) => console.log('Saved Credentials')}
-        initialClientId={SPOTIFY_CLIENT_ID}
-        initialClientSecret={SPOTIFY_CLIENT_SECRET}
+        initialClientId=""
+        initialClientSecret=""
       />
 
       <ProfileEditModal
@@ -229,7 +290,7 @@ function App() {
           <MusicIcon className="w-8 h-8" />
           <span className="text-xl font-bold tracking-tight">Listify</span>
         </div>
-        
+
         <nav className="flex-1 px-4 space-y-1">
           {[
             { id: 'home', icon: Home, label: '홈' },
@@ -238,14 +299,16 @@ function App() {
             { id: 'profile', icon: UserIcon, label: '프로필' },
             { id: 'notices', icon: Bell, label: '공지사항' }
           ].map((item) => (
-            <button 
+            <button
               key={item.id}
-              onClick={() => setView(item.id as AppView)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
-                view === item.id 
-                ? 'bg-zinc-900 text-primary font-bold shadow-inner' 
+              onClick={() => {
+                setView(item.id as AppView);
+                setIsDetailOpen(false);
+              }}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${view === item.id
+                ? 'bg-zinc-900 text-primary font-bold shadow-inner'
                 : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
-              }`}
+                }`}
             >
               <item.icon className="w-5 h-5" /> {item.label}
             </button>
@@ -253,7 +316,8 @@ function App() {
         </nav>
 
         <div className="p-4 border-t border-zinc-800 space-y-2">
-          <button 
+
+          <button
             onClick={() => setIsCartOpen(true)}
             className="w-full flex items-center justify-between px-4 py-2 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors text-sm border border-primary/20"
           >
@@ -263,6 +327,7 @@ function App() {
           <button onClick={() => setIsSettingsOpen(true)} className="w-full flex items-center gap-3 px-4 py-2 text-zinc-500 hover:text-white text-sm transition-colors">
             <Settings className="w-4 h-4" /> 설정
           </button>
+
           <button 
             onClick={handleDeleteAccount}
             className="w-full flex items-center gap-3 px-4 py-2 text-zinc-500 hover:text-orange-400 text-sm transition-colors"
@@ -284,9 +349,9 @@ function App() {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 bg-black relative overflow-hidden">
-        <Header 
-          viewTitle={view === 'home' ? 'Home' : view === 'search' ? 'Search' : view === 'library' ? 'Library' : view === 'profile' ? 'Profile & Analytics' : 'Notices'} 
-          user={user} 
+        <Header
+          viewTitle={view === 'home' ? 'Home' : view === 'search' ? 'Search' : view === 'library' ? 'Library' : view === 'profile' ? 'Profile & Analytics' : 'Notices'}
+          user={user}
         />
 
         <div className="flex-1 overflow-y-auto p-8 pb-32">
@@ -297,7 +362,7 @@ function App() {
                 <p className="text-zinc-400 text-lg max-w-lg leading-relaxed">
                   당신만의 음악 장바구니를 채우고 완벽한 플레이리스트를 만들어보세요.
                 </p>
-                <button 
+                <button
                   onClick={() => setView('search')}
                   className="mt-6 bg-white text-black px-6 py-3 rounded-full font-bold hover:scale-105 transition-transform"
                 >
@@ -315,13 +380,12 @@ function App() {
                     <div key={i} className="bg-zinc-900/40 p-4 rounded-xl border border-zinc-800/50 hover:bg-zinc-800/60 hover:border-zinc-700 transition-all group relative">
                       <div className="relative mb-3 aspect-square rounded-lg overflow-hidden">
                         <img src={song.album_image_url} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                        <button 
+                        <button
                           onClick={() => toggleCart(song)}
-                          className={`absolute bottom-2 right-2 p-2 rounded-full shadow-xl transition-all ${
-                            cart.some(c => c.spotify_url === song.spotify_url)
+                          className={`absolute bottom-2 right-2 p-2 rounded-full shadow-xl transition-all ${cart.some(c => c.spotify_url === song.spotify_url)
                             ? 'bg-primary text-black opacity-100'
                             : 'bg-black/60 text-white opacity-0 group-hover:opacity-100 hover:bg-white hover:text-black'
-                          }`}
+                            }`}
                         >
                           {cart.some(c => c.spotify_url === song.spotify_url) ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
                         </button>
@@ -340,7 +404,7 @@ function App() {
               <div className="max-w-2xl mx-auto">
                 <form onSubmit={handleSearch} className="relative group">
                   <Search className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${isSearching ? 'text-primary' : 'text-zinc-500 group-focus-within:text-primary'}`} />
-                  <input 
+                  <input
                     type="text"
                     placeholder="곡 제목, 아티스트 또는 앨범 검색"
                     className="w-full bg-zinc-900 border border-zinc-800 rounded-full py-4 pl-12 pr-4 text-lg focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all shadow-xl"
@@ -362,13 +426,12 @@ function App() {
                           <p className="font-bold text-sm truncate text-white">{song.track_name}</p>
                           <p className="text-xs text-zinc-400 truncate mt-0.5">{song.artist_name}</p>
                         </div>
-                        <button 
+                        <button
                           onClick={() => toggleCart(song)}
-                          className={`p-2 rounded-full transition-all ${
-                            cart.some(c => c.spotify_url === song.spotify_url)
+                          className={`p-2 rounded-full transition-all ${cart.some(c => c.spotify_url === song.spotify_url)
                             ? 'bg-primary/20 text-primary border border-primary/30'
                             : 'bg-zinc-800 text-zinc-400 opacity-0 group-hover:opacity-100 hover:text-white'
-                          }`}
+                            }`}
                         >
                           {cart.some(c => c.spotify_url === song.spotify_url) ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
                         </button>
@@ -386,10 +449,10 @@ function App() {
           )}
 
           {view === 'library' && (
-            <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+            <div className="space-y-6">
               <div className="flex justify-between items-center">
                 <h2 className="text-3xl font-bold">라이브러리</h2>
-                <button 
+                <button
                   onClick={() => setView('search')}
                   className="bg-white text-black px-6 py-2 rounded-full text-sm font-bold hover:bg-zinc-200 transition-colors flex items-center gap-2"
                 >
@@ -398,13 +461,13 @@ function App() {
               </div>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                 {playlists.length === 0 ? (
-                  <div className="col-span-full py-32 text-center border-2 border-dashed border-zinc-800 rounded-3xl group hover:border-zinc-700 transition-colors">
-                    <MusicIcon className="w-16 h-16 mx-auto mb-4 text-zinc-700 group-hover:text-zinc-500 transition-colors" />
+                  <div className="col-span-full py-32 text-center border-2 border-dashed border-zinc-800 rounded-3xl">
+                    <MusicIcon className="w-16 h-16 mx-auto mb-4 text-zinc-700" />
                     <p className="text-zinc-500 text-lg">아직 저장된 플레이리스트가 없습니다.</p>
                     <p className="text-zinc-600 text-sm mt-2">좋아하는 곡을 찾아 장바구니에 담아보세요.</p>
                   </div>
                 ) : (
-                  playlists.map(p => <PlaylistCard key={p.playlist_no} playlist={p} onClick={() => {}} />)
+                  playlists.map(p => <PlaylistCard key={p.playlist_no} playlist={p} onClick={handlePlaylistClick} />)
                 )}
               </div>
             </div>
@@ -502,27 +565,52 @@ function App() {
           </div>
         )}
 
-        <CartSidebar 
-          isOpen={isCartOpen} 
-          onClose={() => setIsCartOpen(false)} 
+        <CartSidebar
+          isOpen={isCartOpen}
+          onClose={() => setIsCartOpen(false)}
           items={cart}
           onRemove={(url) => setCart(cart.filter(c => c.spotify_url !== url))}
           onClear={() => setCart([])}
-          onSavePlaylist={(title, desc) => {
-            const newP: Playlist = {
-              playlist_no: Date.now(),
-              user_no: user.user_no,
-              title,
-              content: desc,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-              music_items: cart
-            };
-            setPlaylists([newP, ...playlists]);
-            setCart([]);
-            setIsCartOpen(false);
-            setView('library');
+          onSavePlaylist={handleSavePlaylist}
+        />
+
+        <PlaylistDetail
+          playlist={selectedPlaylist}
+          isOpen={isDetailOpen}
+          onClose={() => setIsDetailOpen(false)}
+          onRemoveMusic={handleRemoveMusic}
+          onDeletePlaylist={handleDeletePlaylist}
+          onEdit={() => {
+            setIsEditMode(true);
+            setIsCreateModalOpen(true);
           }}
+        />
+
+        <CreatePlaylistModal
+          isOpen={isCreateModalOpen}
+          onClose={() => {
+            setIsCreateModalOpen(false);
+            setIsEditMode(false);
+          }}
+          onSave={async (title, content) => {
+            if (isEditMode && selectedPlaylist) {
+              // 수정 모드
+              const res = await updatePlaylist(selectedPlaylist.playlist_no, title, content);
+              if (res.success && user) {
+                await fetchPlaylists(user.user_no);
+                setIsCreateModalOpen(false);
+                setIsEditMode(false);
+                setIsDetailOpen(false);
+              }
+            } else {
+              // 생성 모드
+              await handleSavePlaylist(title, content);
+              setIsCreateModalOpen(false);
+            }
+          }}
+          initialTitle={isEditMode ? selectedPlaylist?.title : ''}
+          initialContent={isEditMode ? selectedPlaylist?.content || '' : ''}
+          mode={isEditMode ? 'edit' : 'create'}
         />
       </main>
     </div>

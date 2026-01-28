@@ -36,10 +36,10 @@ services:
       - DB_HOST=host.docker.internal  # 로컬 MySQL 사용 (Docker 내부에서 호스트 접근)
       - DB_PORT=${DB_PORT:-3306}
       - DB_USER=${DB_USER:-root}
-      - DB_PASSWORD=${DB_PASSWORD:-0000}
+      - DB_PASSWORD=${DB_PASSWORD:-}
       - DB_DATABASE=${DB_DATABASE:-listify}
-      - SPOTIFY_CLIENT_ID=${SPOTIPY_CLIENT_ID}  # .env의 SPOTIPY_CLIENT_ID 사용
-      - SPOTIFY_CLIENT_SECRET=${SPOTIPY_CLIENT_SECRET}  # .env의 SPOTIPY_CLIENT_SECRET 사용
+      - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}
+      - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}
     ports:
       - "5001:5001"
     # Docker MySQL 사용 시 아래 주석 제거

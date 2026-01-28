@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Trash2, GripVertical, Save, X, ListMusic } from 'lucide-react';
+import { Trash2, GripVertical, Save, X, ListMusic, ListPlus } from 'lucide-react';
 import { Music } from '../types';
 
 interface CartSidebarProps {
@@ -9,6 +9,7 @@ interface CartSidebarProps {
   isOpen: boolean;
   onClose: () => void;
   onSavePlaylist: (name: string, desc: string) => void;
+  onAddToExistingPlaylist: () => void;
 }
 
 export default function CartSidebar({
@@ -17,7 +18,8 @@ export default function CartSidebar({
   onClear,
   isOpen,
   onClose,
-  onSavePlaylist
+  onSavePlaylist,
+  onAddToExistingPlaylist
 }: CartSidebarProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [playlistName, setPlaylistName] = useState('');
@@ -31,10 +33,11 @@ export default function CartSidebar({
     setPlaylistDesc('');
   };
 
+  if (!isOpen) return null;
+
   return (
     <div
-      className={`fixed top-0 right-0 h-full w-80 md:w-96 bg-card border-l border-zinc-800 transition-transform duration-300 z-50 shadow-2xl flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'
-        }`}
+      className="h-full w-80 md:w-96 bg-card border-l border-zinc-800 flex flex-col flex-shrink-0"
     >
       {/* Header */}
       <div className="p-4 border-b border-zinc-800 flex justify-between items-center bg-zinc-900">
@@ -133,6 +136,13 @@ export default function CartSidebar({
               className="w-full flex items-center justify-center gap-2 py-2 bg-primary text-black font-bold rounded"
             >
               <Save className="w-4 h-4" /> 플레이리스트로 저장
+            </button>
+            <button
+              onClick={onAddToExistingPlaylist}
+              disabled={items.length === 0}
+              className="w-full flex items-center justify-center gap-2 py-2 bg-zinc-800 text-white font-medium rounded hover:bg-zinc-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <ListPlus className="w-4 h-4" /> 기존 플레이리스트에 추가
             </button>
             <button
               onClick={onClear}

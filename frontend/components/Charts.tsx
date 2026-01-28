@@ -1,5 +1,5 @@
 import React from 'react';
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Legend } from 'recharts';
 import { ListeningStats } from '../types';
 
 const COLORS = ['#1DB954', '#FF6B6B', '#4ECDC4', '#FFE66D', '#A8E6CF'];
@@ -36,7 +36,7 @@ export const GenreDistribution: React.FC<GenreDistributionProps> = ({ data }) =>
 };
 
 interface WeeklyActivityProps {
-  data: { day: string; hours: number }[];
+  data: { day: string; playlists: number; songs: number }[];
 }
 
 export const WeeklyActivity: React.FC<WeeklyActivityProps> = ({ data }) => {
@@ -46,12 +46,18 @@ export const WeeklyActivity: React.FC<WeeklyActivityProps> = ({ data }) => {
       <ResponsiveContainer width="100%" height={250}>
         <BarChart data={data}>
           <XAxis dataKey="day" stroke="#a1a1aa" />
-          <YAxis stroke="#a1a1aa" />
-          <Tooltip 
+          <YAxis stroke="#a1a1aa" allowDecimals={false} />
+          <Tooltip
             contentStyle={{ backgroundColor: '#27272a', border: '1px solid #3f3f46', borderRadius: '8px' }}
             labelStyle={{ color: '#fff' }}
+            formatter={(value: number, name: string) => [value, name === 'playlists' ? '플레이리스트 생성' : '곡 추가']}
           />
-          <Bar dataKey="hours" fill="#1DB954" radius={[8, 8, 0, 0]} />
+          <Legend
+            formatter={(value: string) => value === 'playlists' ? '플레이리스트 생성' : '곡 추가'}
+            wrapperStyle={{ paddingTop: '10px' }}
+          />
+          <Bar dataKey="playlists" stackId="a" fill="#1DB954" name="playlists" />
+          <Bar dataKey="songs" stackId="a" fill="#4ECDC4" name="songs" radius={[8, 8, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -59,7 +65,7 @@ export const WeeklyActivity: React.FC<WeeklyActivityProps> = ({ data }) => {
 };
 
 interface AudioRadarProps {
-  data: { subject: string; A: number; fullMark: number }[];
+  data: { subject: string; value: number }[];
 }
 
 export const AudioRadar: React.FC<AudioRadarProps> = ({ data }) => {
@@ -70,8 +76,8 @@ export const AudioRadar: React.FC<AudioRadarProps> = ({ data }) => {
         <RadarChart cx="50%" cy="50%" outerRadius="80%" data={data}>
           <PolarGrid stroke="#3f3f46" />
           <PolarAngleAxis dataKey="subject" stroke="#a1a1aa" />
-          <PolarRadiusAxis stroke="#a1a1aa" />
-          <Radar name="Score" dataKey="A" stroke="#1DB954" fill="#1DB954" fillOpacity={0.6} />
+          <PolarRadiusAxis stroke="#a1a1aa" domain={[0, 100]} />
+          <Radar name="Score" dataKey="value" stroke="#1DB954" fill="#1DB954" fillOpacity={0.6} />
           <Tooltip 
             contentStyle={{ backgroundColor: '#27272a', border: '1px solid #3f3f46', borderRadius: '8px' }}
             labelStyle={{ color: '#fff' }}

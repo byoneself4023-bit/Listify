@@ -12,3 +12,7 @@ export const updateUserProfile = async (userNo: number, nickname: string) => {
 export const deleteAccount = async (userNo: number) => {
   return await api.delete(`/users/${userNo}`);
 };
+
+export const getUserStats = async (userNo: number) => {
+  return await api.get(`/users/${userNo}/stats`);
+};

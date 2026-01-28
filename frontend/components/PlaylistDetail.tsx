@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Trash2, Clock, Music as MusicIcon, Calendar, Edit3 } from 'lucide-react';
+import { X, Trash2, Clock, Music as MusicIcon, Calendar, Edit3, Plus } from 'lucide-react';
 import { Playlist, Music } from '../types';
 
 interface PlaylistDetailProps {
@@ -9,6 +9,7 @@ interface PlaylistDetailProps {
     onRemoveMusic: (musicNo: number) => void;
     onDeletePlaylist: () => void;
     onEdit: () => void;
+    onAddMusic: () => void;
 }
 
 const PlaylistDetail: React.FC<PlaylistDetailProps> = ({
@@ -17,7 +18,8 @@ const PlaylistDetail: React.FC<PlaylistDetailProps> = ({
     onClose,
     onRemoveMusic,
     onDeletePlaylist,
-    onEdit
+    onEdit,
+    onAddMusic
 }) => {
     if (!playlist) return null;
 
@@ -56,6 +58,13 @@ const PlaylistDetail: React.FC<PlaylistDetailProps> = ({
             <div className="p-4 border-b border-zinc-800 flex justify-between items-center bg-zinc-900">
                 <h2 className="text-xl font-bold truncate flex-1">{playlist.title}</h2>
                 <div className="flex gap-2">
+                    <button
+                        onClick={onAddMusic}
+                        className="p-2 text-zinc-400 hover:text-primary hover:bg-zinc-800 rounded-lg transition-colors"
+                        title="곡 추가"
+                    >
+                        <Plus className="w-4 h-4" />
+                    </button>
                     <button
                         onClick={onEdit}
                         className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors"

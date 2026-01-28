@@ -1,5 +1,5 @@
 // frontend/App.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import SearchPage from './pages/SearchPage';
 
 
@@ -8,15 +8,15 @@ import SearchPage from './pages/SearchPage';
 import {
   Home, Library, Search as SearchIcon, User as UserIcon, LogOut,
   Settings, Bell, Plus, Play, Pause, Music as MusicIcon,
-  Search, Loader2, Heart, Check, Calendar, Clock, Edit3, Trash2
+  Search, Loader2, Heart, Check, Calendar, Clock, Edit3, Trash2, ListPlus
 } from 'lucide-react';
 
 import { Music, Playlist, AppView, User } from './types';
 import { searchMusic, getAllMusic, getTop50Music,  getMusicByGenre } from './services/musicService';
 import { login, register, logout as logoutApi, getToken, verifyToken } from './services/authService';
 import { getUserPlaylists, createPlaylist, updatePlaylist, deletePlaylist, addMusicToPlaylist, removeMusicFromPlaylist, getPlaylistMusic } from './services/playlistService';
-import { MOCK_NOTICES, MOCK_STATS } from './constants';
-import { getUserProfile, updateUserProfile, deleteAccount } from './services/userService';
+import { MOCK_NOTICES } from './constants';
+import { getUserProfile, updateUserProfile, deleteAccount, getUserStats } from './services/userService';
 
 import Header from './components/Header';
 import PlaylistCard from './components/PlaylistCard';
@@ -60,9 +60,18 @@ function App() {
 
   const [isAddToPlaylistModalOpen, setIsAddToPlaylistModalOpen] = useState(false);
   const [selectedMusicToAdd, setSelectedMusicToAdd] = useState<Music | null>(null);
+  const [addToPlaylistMode, setAddToPlaylistMode] = useState<'single' | 'cart'>('single');
+  const selectedMusicRef = useRef<Music | null>(null);
 
   const [isLoading, setIsLoading] = useState(false);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
+
+  // 사용자 통계
+  const [userStats, setUserStats] = useState<{
+    genreDistribution: { name: string; value: number }[];
+    weeklyActivity: { day: string; playlists: number; songs: number }[];
+    audioFeatures: { energy: number; danceability: number; valence: number; acousticness: number; instrumentalness: number };
+  } | null>(null);
 
   // 🔐 자동 로그인
   useEffect(() => {
@@ -119,6 +128,25 @@ function App() {
       setIsLoading(false);
     }
   };
+
+  // 사용자 통계 조회 함수
+  const fetchUserStats = async (userNo: number) => {
+    try {
+      const response = await getUserStats(userNo);
+      if (response.success && response.data) {
+        setUserStats(response.data);
+      }
+    } catch (e) {
+      console.error('사용자 통계 조회 실패:', e);
+    }
+  };
+
+  // 프로필 페이지 진입 시 통계 로드
+  useEffect(() => {
+    if (view === 'profile' && user) {
+      fetchUserStats(user.user_no);
+    }
+  }, [view, user]);
 
   // 프로필 및 플레이리스트 데이터 로드
   useEffect(() => {
@@ -272,6 +300,7 @@ const handleSearchByGenre = async (genre: string) => {
       setCart(cart.filter(c => c.spotify_url !== song.spotify_url));
     } else {
       setCart([...cart, song]);
+      setIsCartOpen(true); // 곡 추가 시 장바구니 자동 열림
     }
   };
 
@@ -324,6 +353,9 @@ const handleSearchByGenre = async (genre: string) => {
   const handleCreatePlaylist = async (title: string, content: string) => {
     if (!user) return;
 
+    // ref에서 곡 정보를 가져옴 (클로저 stale 방지)
+    const musicToAdd = selectedMusicRef.current;
+
     try {
       const createRes = await createPlaylist(title, content);
       if (!createRes.success || !createRes.data) {
@@ -334,8 +366,9 @@ const handleSearchByGenre = async (genre: string) => {
       const playlistNo = createRes.data.playlist_no;
 
       // 선택한 곡이 있으면 플레이리스트에 추가
-      if (selectedMusicToAdd) {
-        await addMusicToPlaylist(playlistNo, selectedMusicToAdd.music_no);
+      if (musicToAdd) {
+        await addMusicToPlaylist(playlistNo, musicToAdd.music_no);
+        selectedMusicRef.current = null;
         setSelectedMusicToAdd(null);
       }
 
@@ -350,18 +383,33 @@ const handleSearchByGenre = async (genre: string) => {
     }
   };
 
-  // 기존 플레이리스트에 곡 추가
+  // 기존 플레이리스트에 곡 추가 (단일 곡 / 장바구니 일괄)
   const handleAddMusicToPlaylist = async (playlistNo: number) => {
-    if (!user || !selectedMusicToAdd) return;
+    if (!user) return;
 
     try {
-      const res = await addMusicToPlaylist(playlistNo, selectedMusicToAdd.music_no);
-      if (res.success) {
+      if (addToPlaylistMode === 'cart') {
+        // 장바구니 전체 곡을 기존 플레이리스트에 추가
+        for (const music of cart) {
+          await addMusicToPlaylist(playlistNo, music.music_no);
+        }
+        setCart([]);
+        setIsCartOpen(false);
         await fetchPlaylists(user.user_no);
-        setSelectedMusicToAdd(null);
-        alert('곡이 플레이리스트에 추가되었습니다!');
+        alert('장바구니의 곡들이 플레이리스트에 추가되었습니다!');
       } else {
-        alert(res.message || '곡 추가에 실패했습니다.');
+        // 단일 곡 추가
+        const musicToAdd = selectedMusicRef.current || selectedMusicToAdd;
+        if (!musicToAdd) return;
+        const res = await addMusicToPlaylist(playlistNo, musicToAdd.music_no);
+        if (res.success) {
+          await fetchPlaylists(user.user_no);
+          alert('곡이 플레이리스트에 추가되었습니다!');
+        } else {
+          alert(res.message || '곡 추가에 실패했습니다.');
+        }
+        selectedMusicRef.current = null;
+        setSelectedMusicToAdd(null);
       }
     } catch (error) {
       console.error('곡 추가 실패:', error);
@@ -369,9 +417,17 @@ const handleSearchByGenre = async (genre: string) => {
     }
   };
 
-  // 곡 추가 모달 열기
+  // 곡 추가 모달 열기 (단일 곡)
   const handleOpenAddToPlaylist = (music: Music) => {
+    setAddToPlaylistMode('single');
     setSelectedMusicToAdd(music);
+    selectedMusicRef.current = music;
+    setIsAddToPlaylistModalOpen(true);
+  };
+
+  // 장바구니 전체 → 기존 플레이리스트에 추가 모달 열기
+  const handleOpenAddCartToPlaylist = () => {
+    setAddToPlaylistMode('cart');
     setIsAddToPlaylistModalOpen(true);
   };
 
@@ -381,9 +437,16 @@ const handleSearchByGenre = async (genre: string) => {
     try {
       const res = await removeMusicFromPlaylist(selectedPlaylist.playlist_no, musicNo);
       if (res.success && user) {
+        // 즉시 selectedPlaylist에서 해당 곡 제거 (stale closure 방지)
+        setSelectedPlaylist(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            music_items: (prev.music_items || []).filter(m => m.music_no !== musicNo)
+          };
+        });
+        // 전체 플레이리스트 목록도 갱신
         await fetchPlaylists(user.user_no);
-        const updated = playlists.find(p => p.playlist_no === selectedPlaylist.playlist_no);
-        if (updated) setSelectedPlaylist(updated);
       }
     } catch (error) {
       console.error('음악 제거 실패:', error);
@@ -574,6 +637,7 @@ const handleSearchByGenre = async (genre: string) => {
           user={user}
         />
 
+        <div className="flex-1 flex overflow-hidden">
         <div className="flex-1 overflow-y-auto p-8 pb-32">
           {view === 'home' && (
             <div className="space-y-8 animate-in fade-in duration-500">
@@ -651,7 +715,7 @@ const handleSearchByGenre = async (genre: string) => {
 
                 {/* Genre Buttons */}
                 <div className="flex flex-wrap gap-2 justify-center">
-                  {['K-Pop', 'Pop', 'Rock', 'Hip-Hop', 'Jazz', 'Electronic'].map((genre) => (
+                  {['K-Pop', 'Pop', 'Rock', 'Hip-Hop', 'Jazz', 'Electronic', 'Metal'].map((genre) => (
                     <button
                       key={genre}
                       type="button"
@@ -688,10 +752,25 @@ const handleSearchByGenre = async (genre: string) => {
                         </div>
                         <button
                           onClick={() => handleOpenAddToPlaylist(song)}
-                          className="p-2 rounded-full bg-zinc-800 text-zinc-400 opacity-0 group-hover:opacity-100 hover:text-white hover:bg-primary hover:text-black transition-all"
+                          className="p-2 rounded-full transition-all bg-zinc-800 text-primary hover:bg-primary hover:text-black border border-primary/30"
                           title="플레이리스트에 추가"
                         >
-                          <Plus className="w-4 h-4" />
+                          <ListPlus className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => toggleCart(song)}
+                          className={`p-2 rounded-full transition-all ${
+                            cart.some(c => c.spotify_url === song.spotify_url)
+                              ? 'bg-primary text-black'
+                              : 'bg-zinc-800 text-zinc-400 hover:bg-primary hover:text-black'
+                          }`}
+                          title="장바구니에 추가"
+                        >
+                          {cart.some(c => c.spotify_url === song.spotify_url) ? (
+                            <Check className="w-4 h-4" />
+                          ) : (
+                            <Plus className="w-4 h-4" />
+                          )}
                         </button>
                       </div>
                     ))}
@@ -768,28 +847,42 @@ const handleSearchByGenre = async (genre: string) => {
               </div>
 
               {/* Analytics Section */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <div className="bg-zinc-900/50 p-6 rounded-3xl border border-zinc-800">
-                  <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-                    <Plus className="w-4 h-4 text-primary" /> 선호 장르 분포
-                  </h3>
-                  <GenreDistribution data={MOCK_STATS.topGenres} />
-                </div>
-                <div className="bg-zinc-900/50 p-6 rounded-3xl border border-zinc-800">
-                  <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-primary" /> 주간 활동 패턴
-                  </h3>
-                  <WeeklyActivity data={MOCK_STATS.weeklyActivity} />
-                </div>
-                <div className="bg-zinc-900/50 p-6 rounded-3xl border border-zinc-800 lg:col-span-2">
-                  <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-                    <MusicIcon className="w-4 h-4 text-primary" /> 음악적 특성 분석
-                  </h3>
-                  <div className="max-w-xl mx-auto">
-                    <AudioRadar data={MOCK_STATS.audioFeatures} />
+              {userStats && userStats.genreDistribution.length > 0 ? (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  <div className="bg-zinc-900/50 p-6 rounded-3xl border border-zinc-800">
+                    <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+                      <Plus className="w-4 h-4 text-primary" /> 선호 장르 분포
+                    </h3>
+                    <GenreDistribution data={userStats.genreDistribution.map(g => ({ name: g.name, value: g.value }))} />
+                  </div>
+                  <div className="bg-zinc-900/50 p-6 rounded-3xl border border-zinc-800">
+                    <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-primary" /> 주간 활동 패턴
+                    </h3>
+                    <WeeklyActivity data={userStats.weeklyActivity.map(w => ({ day: w.day, playlists: w.playlists, songs: w.songs }))} />
+                  </div>
+                  <div className="bg-zinc-900/50 p-6 rounded-3xl border border-zinc-800 lg:col-span-2">
+                    <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+                      <MusicIcon className="w-4 h-4 text-primary" /> 음악적 특성 분석
+                    </h3>
+                    <div className="max-w-xl mx-auto">
+                      <AudioRadar data={[
+                        { subject: 'Energy', value: userStats.audioFeatures.energy },
+                        { subject: 'Danceability', value: userStats.audioFeatures.danceability },
+                        { subject: 'Valence', value: userStats.audioFeatures.valence },
+                        { subject: 'Acousticness', value: userStats.audioFeatures.acousticness },
+                        { subject: 'Instrumentalness', value: userStats.audioFeatures.instrumentalness },
+                      ]} />
+                    </div>
                   </div>
                 </div>
-              </div>
+              ) : (
+                <div className="bg-zinc-900/50 p-12 rounded-3xl border border-zinc-800 text-center">
+                  <MusicIcon className="w-16 h-16 mx-auto mb-4 text-zinc-700" />
+                  <p className="text-zinc-500 text-lg">아직 분석할 데이터가 없습니다.</p>
+                  <p className="text-zinc-600 text-sm mt-2">플레이리스트에 곡을 추가하면 통계가 표시됩니다.</p>
+                </div>
+              )}
             </div>
           )}
           {view === 'notices' && <NoticesPage />}
@@ -803,7 +896,9 @@ const handleSearchByGenre = async (genre: string) => {
           onRemove={(url) => setCart(cart.filter(c => c.spotify_url !== url))}
           onClear={() => setCart([])}
           onSavePlaylist={handleSavePlaylist}
+          onAddToExistingPlaylist={handleOpenAddCartToPlaylist}
         />
+        </div>
 
         <PlaylistDetail
           playlist={selectedPlaylist}
@@ -815,6 +910,10 @@ const handleSearchByGenre = async (genre: string) => {
             setIsEditMode(true);
             setIsCreateModalOpen(true);
           }}
+          onAddMusic={() => {
+            setIsDetailOpen(false);
+            setView('search');
+          }}
         />
 
         <CreatePlaylistModal
@@ -822,6 +921,7 @@ const handleSearchByGenre = async (genre: string) => {
           onClose={() => {
             setIsCreateModalOpen(false);
             setIsEditMode(false);
+            selectedMusicRef.current = null;
             setSelectedMusicToAdd(null);
           }}
           onSave={async (title, content) => {
@@ -851,7 +951,9 @@ const handleSearchByGenre = async (genre: string) => {
           isOpen={isAddToPlaylistModalOpen}
           onClose={() => {
             setIsAddToPlaylistModalOpen(false);
+            selectedMusicRef.current = null;
             setSelectedMusicToAdd(null);
+            setAddToPlaylistMode('single');
           }}
           playlists={playlists}
           onSelectPlaylist={handleAddMusicToPlaylist}

@@ -19,8 +19,9 @@ def insert_music(m):
             sql = """
             INSERT INTO music
             (track_name, artist_name, album_name, album_image_url,
-             duration_ms, popularity, spotify_url, genre_no, preview_url)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+             duration_ms, popularity, spotify_url, genre_no, preview_url,
+             spotify_track_id, energy, danceability, valence, acousticness, instrumentalness)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             """
             c.execute(sql, (
                 m['track_name'],
@@ -31,7 +32,13 @@ def insert_music(m):
                 m['popularity'],
                 m['spotify_url'],
                 m['genre_no'],
-                m.get('preview_url')
+                m.get('preview_url'),
+                m.get('spotify_track_id'),
+                m.get('energy'),
+                m.get('danceability'),
+                m.get('valence'),
+                m.get('acousticness'),
+                m.get('instrumentalness')
             ))
             conn.commit()
             print(f"  ✅ 저장: {m['track_name']}")

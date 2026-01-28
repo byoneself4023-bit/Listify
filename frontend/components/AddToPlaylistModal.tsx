@@ -53,7 +53,6 @@ const AddToPlaylistModal: React.FC<AddToPlaylistModalProps> = ({
                     <button
                         onClick={() => {
                             onCreateNew();
-                            onClose();
                         }}
                         className="w-full flex items-center gap-4 p-4 hover:bg-zinc-800 transition-colors border-b border-zinc-800"
                     >

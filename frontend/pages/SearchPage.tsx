@@ -18,7 +18,7 @@ interface Props {
   onToggleCart: (song: Music) => void;
 }
 
-const GENRES = ['K-Pop', 'Pop', 'Rock', 'Hip-Hop', 'Jazz', 'Electronic'];
+const GENRES = ['K-Pop', 'Pop', 'Rock', 'Hip-Hop', 'Jazz', 'Electronic', 'Metal'];
 
 export default function SearchPage({
   searchQuery,

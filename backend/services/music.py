@@ -55,6 +55,24 @@ def extract_genre_no(sp, artist_id):
     return None
 
 
+def fetch_audio_features(sp, track_id):
+    """Spotify API에서 오디오 특성 가져오기"""
+    try:
+        features = sp.audio_features([track_id])
+        if features and features[0]:
+            f = features[0]
+            return {
+                "energy": round(f.get("energy", 0) * 100),
+                "danceability": round(f.get("danceability", 0) * 100),
+                "valence": round(f.get("valence", 0) * 100),
+                "acousticness": round(f.get("acousticness", 0) * 100),
+                "instrumentalness": round(f.get("instrumentalness", 0) * 100)
+            }
+    except Exception as e:
+        print(f"  ⚠️ 오디오 특성 조회 실패: {e}")
+    return None
+
+
 def save_track_if_not_exists(sp, track):
     """트랙이 DB에 없으면 저장, 있으면 기존 데이터 반환"""
     spotify_url = track.get("external_urls", {}).get("spotify")
@@ -77,6 +95,12 @@ def save_track_if_not_exists(sp, track):
     images = album.get("images") or []
     album_image_url = images[0].get("url") if images else None
 
+    # Spotify track_id 추출
+    track_id = track.get("id")
+
+    # 오디오 특성 가져오기
+    audio_features = fetch_audio_features(sp, track_id) if track_id else None
+
     music = {
         "track_name": track.get("name") or "",
         "artist_name": artist_name,
@@ -86,8 +110,13 @@ def save_track_if_not_exists(sp, track):
         "popularity": track.get("popularity") or 0,
         "spotify_url": spotify_url,
         "genre_no": genre_no,
-        "preview_url": track.get("preview_url")  # 30초 미리듣기 URL
+        "preview_url": track.get("preview_url"),
+        "spotify_track_id": track_id
     }
+
+    # 오디오 특성이 있으면 추가
+    if audio_features:
+        music.update(audio_features)
 
     music_no = music_model.insert_music(music)
     if music_no:
@@ -137,6 +166,18 @@ def search_and_save_music(keyword, category, page, size):
             if music:
                 music["is_new"] = is_new
                 musics.append(music)
+
+        # 아티스트명이 검색어와 일치하는 곡을 우선 정렬
+        kw = keyword.lower()
+        def relevance(m):
+            artist = (m.get("artist_name") or "").lower()
+            if artist == kw:
+                return 0  # 정확히 일치
+            elif kw in artist:
+                return 1  # 부분 일치
+            else:
+                return 2  # 불일치
+        musics.sort(key=relevance)
 
         return musics, total, None
 
